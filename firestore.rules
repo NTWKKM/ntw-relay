@@ -1,0 +1,95 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 1: Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Reusable Hardened Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Pillar 2: Validation Blueprint synchronized verbatim with firebase-blueprint.json
+    function isValidDrop(data) {
+      return data.keys().hasAll(['ownerId', 'type', 'content', 'createdAt'])
+        && data.keys().hasOnly([
+          'ownerId',
+          'type',
+          'content',
+          'fileName',
+          'fileSize',
+          'mimeType',
+          'downloadUrl',
+          'storagePath',
+          'isCode',
+          'createdAt'
+        ])
+        && data.ownerId is string
+        && data.ownerId.size() >= 1
+        && data.ownerId.size() <= 128
+        && data.ownerId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.ownerId == request.auth.uid
+        && data.type in ['text', 'image', 'file']
+        && data.content is string
+        && data.content.size() <= 50000
+        && data.createdAt is timestamp
+        && (!('fileName' in data) || (data.fileName is string && data.fileName.size() <= 255))
+        && (!('fileSize' in data) || (data.fileSize is number && data.fileSize >= 0 && data.fileSize <= 524288000))
+        && (!('mimeType' in data) || (data.mimeType is string && data.mimeType.size() <= 128))
+        && (!('downloadUrl' in data) || (data.downloadUrl is string && data.downloadUrl.size() <= 2048 && data.downloadUrl.matches('^https://.*$')))
+        && (!('storagePath' in data) || (data.storagePath is string && data.storagePath.size() <= 512 && data.storagePath.matches('^drops/' + request.auth.uid + '/.*$')))
+        && (!('isCode' in data) || (data.isCode is bool));
+    }
+
+    // Personal Drop Collection: Private Single-Owner Drops
+    match /drops/{dropId} {
+      // Single-document read: strict owner isolation + Path ID hardening
+      allow get: if isSignedIn()
+        && isValidId(dropId)
+        && existing().ownerId == request.auth.uid;
+
+      // Pillar 8: Secure List Query (no isValidId, no get(), strict rule-side owner filter)
+      allow list: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid;
+
+      // Create: Auth -> Static Validation -> Temporal Integrity
+      allow create: if isVerified()
+        && isValidId(dropId)
+        && isValidDrop(incoming())
+        && incoming().createdAt == request.time;
+
+      // Pillar 4 & 5: Action-Based Update (only toggling isCode; ownerId & createdAt immutable)
+      allow update: if isVerified()
+        && isValidId(dropId)
+        && isValidDrop(incoming())
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['isCode']);
+
+      // Delete: Verified owner only + Path ID hardening
+      allow delete: if isVerified()
+        && isValidId(dropId)
+        && existing().ownerId == request.auth.uid;
+    }
+  }
+}

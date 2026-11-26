@@ -1,0 +1,6 @@
+{
+  "name": "Personal Drop",
+  "description": "Minimalist cross-device personal clipboard and file-drop workspace with real-time Firebase sync and QR quick-share.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

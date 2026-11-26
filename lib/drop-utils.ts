@@ -1,0 +1,284 @@
+import type { CleanupRange, DropItem, FilterTab } from './types';
+
+export const MAX_TEXT_LENGTH = 50000;
+export const MAX_FILENAME_LENGTH = 255;
+export const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024; // 500 MB
+
+export interface TextSegment {
+  type: 'text' | 'url';
+  value: string;
+}
+
+const URL_REGEX = /(https?:\/\/[^\s<>"'`)\]]+)/gi;
+
+/**
+ * Validates that a URL strictly uses http: or https: to prevent javascript:/data: XSS.
+ */
+export function isSafeHttpUrl(raw: string): boolean {
+  try {
+    const parsed = new URL(raw.trim());
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Splits a text string into safe plain-text and clickable http(s) URL segments.
+ */
+export function parseTextSegments(text: string): TextSegment[] {
+  if (!text) return [];
+  const segments: TextSegment[] = [];
+  let lastIndex = 0;
+
+  const pushText = (value: string) => {
+    if (!value) return;
+    const prev = segments[segments.length - 1];
+    if (prev && prev.type === 'text') {
+      prev.value += value;
+    } else {
+      segments.push({ type: 'text', value });
+    }
+  };
+
+  for (const match of text.matchAll(URL_REGEX)) {
+    const rawUrl = match[0];
+    const index = match.index ?? 0;
+
+    // Strip common trailing punctuation from detected URLs
+    const cleanUrl = rawUrl.replace(/[.,;:!?]+$/, '');
+    const trailingLen = rawUrl.length - cleanUrl.length;
+
+    if (index > lastIndex) {
+      pushText(text.slice(lastIndex, index));
+    }
+
+    if (isSafeHttpUrl(cleanUrl)) {
+      segments.push({ type: 'url', value: cleanUrl });
+      if (trailingLen > 0) {
+        pushText(rawUrl.slice(cleanUrl.length));
+      }
+    } else {
+      pushText(rawUrl);
+    }
+
+    lastIndex = index + rawUrl.length;
+  }
+
+  if (lastIndex < text.length) {
+    pushText(text.slice(lastIndex));
+  }
+
+  return segments;
+}
+
+/**
+ * Heuristic check for whether dropped text resembles source code, JSON, SQL, or shell commands.
+ */
+export function looksLikeCode(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed || trimmed.length < 6) return false;
+
+  // Single pure URL is a link, not code
+  if (/^https?:\/\/\S+$/i.test(trimmed)) return false;
+
+  // Explicit fenced code block or JSON object/array
+  if (/^```[\s\S]*```$/m.test(trimmed)) return true;
+  if (
+    (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+    (trimmed.startsWith('[') && trimmed.endsWith(']'))
+  ) {
+    try {
+      JSON.parse(trimmed);
+      return true;
+    } catch {
+      // Continue heuristic scoring
+    }
+  }
+
+  // Direct CLI command invocation at start of line
+  if (
+    /^\s*(curl|git|npm|npx|pnpm|yarn|docker|gcloud|gsutil|firebase|ssh|chmod|export|sudo|kubectl)\s+\S+/m.test(
+      trimmed
+    )
+  ) {
+    return true;
+  }
+
+  const signals = [
+    /\b(const|let|var|function|async|await|import|export|return|interface|type)\b/,
+    /\b(SELECT|INSERT|UPDATE|DELETE|CREATE TABLE|FROM|WHERE)\b/,
+    /\b(def |class |elif |lambda |print\(|from .+ import )/,
+    /=>\s*\{|\{\s*\n[\s\S]*\n\s*\}/,
+    /<\/?[a-z][a-z0-9-]*(\s+[^>]*)?>/i,
+    /;\s*$/m,
+  ];
+
+  let score = 0;
+  for (const pattern of signals) {
+    if (pattern.test(trimmed)) score += 1;
+  }
+
+  const hasIndentedLines = /^\s{2,}\S/m.test(trimmed) && trimmed.includes('\n');
+  if (hasIndentedLines) score += 1;
+
+  return score >= 2 || (score === 1 && trimmed.includes('\n') && /[{}();=<>]/.test(trimmed));
+}
+
+/**
+ * Formats byte count into a concise human-readable label.
+ */
+export function formatBytes(bytes: number | undefined): string {
+  if (bytes === undefined || !Number.isFinite(bytes) || bytes < 0) return '0 B';
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let value = bytes / 1024;
+  let unitIdx = 0;
+  while (value >= 1024 && unitIdx < units.length - 1) {
+    value /= 1024;
+    unitIdx += 1;
+  }
+  const precision = value >= 100 ? 0 : value >= 10 ? 1 : 2;
+  return `${Number(value.toFixed(precision))} ${units[unitIdx]}`;
+}
+
+/**
+ * Formats an epoch timestamp into a crisp relative or short date label.
+ */
+export function formatRelativeTime(timestampMs: number, nowMs: number = Date.now()): string {
+  const diffSec = Math.max(0, Math.floor((nowMs - timestampMs) / 1000));
+  if (diffSec < 45) return 'Just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 7) return `${diffDay}d ago`;
+
+  const date = new Date(timestampMs);
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
+/**
+ * Sanitizes filenames while preserving UTF-8 characters (including Thai script).
+ */
+export function sanitizeFileName(rawName: string): string {
+  const cleaned = rawName
+    .replace(/[\u0000-\u001F\u007F]/g, '')
+    .replace(/[/\\]+/g, '_')
+    .replace(/\.\.+/g, '.')
+    .trim();
+
+  const fallback = cleaned || 'untitled-file';
+  if (fallback.length <= MAX_FILENAME_LENGTH) return fallback;
+
+  const dotIdx = fallback.lastIndexOf('.');
+  if (dotIdx > 0 && fallback.length - dotIdx <= 16) {
+    const ext = fallback.slice(dotIdx);
+    return fallback.slice(0, MAX_FILENAME_LENGTH - ext.length) + ext;
+  }
+  return fallback.slice(0, MAX_FILENAME_LENGTH);
+}
+
+/**
+ * Generates a Firestore-safe document ID matching ^[a-zA-Z0-9_\-]+$.
+ */
+export function generateDropId(): string {
+  const ts = Date.now().toString(36);
+  const rand = Math.random().toString(36).slice(2, 10);
+  return `drop_${ts}_${rand}`;
+}
+
+/**
+ * Validates and trims text content against the blueprint's 50,000-character limit.
+ */
+export function validateDropContent(raw: string): { valid: boolean; value: string; error?: string } {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return { valid: false, value: '', error: 'Enter some text or a link before sending.' };
+  }
+  if (trimmed.length > MAX_TEXT_LENGTH) {
+    return {
+      valid: false,
+      value: trimmed.slice(0, MAX_TEXT_LENGTH),
+      error: `Text exceeds the ${MAX_TEXT_LENGTH.toLocaleString()} character limit.`,
+    };
+  }
+  return { valid: true, value: trimmed };
+}
+
+/**
+ * Filters drops by category tab and search query, sorted newest-first.
+ */
+export function filterDrops(items: DropItem[], tab: FilterTab, query: string): DropItem[] {
+  const normalizedQuery = query.trim().toLowerCase();
+
+  return [...items]
+    .filter((item) => {
+      if (tab !== 'all' && item.type !== tab) return false;
+      if (!normalizedQuery) return true;
+      const haystack = [item.content, item.fileName ?? '', item.mimeType ?? '']
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(normalizedQuery);
+    })
+    .sort((a, b) => b.createdAtMs - a.createdAtMs);
+}
+
+/**
+ * Returns IDs of drops eligible for cleanup based on the selected time range.
+ */
+export function getOldDropIds(
+  items: DropItem[],
+  range: CleanupRange,
+  nowMs: number = Date.now()
+): string[] {
+  if (range === 'all') return items.map((item) => item.id);
+  const cutoffMs =
+    range === '24h' ? nowMs - 24 * 60 * 60 * 1000 : nowMs - 7 * 24 * 60 * 60 * 1000;
+  return items.filter((item) => item.createdAtMs < cutoffMs).map((item) => item.id);
+}
+
+/**
+ * Determines the primary QR payload for any drop card.
+ */
+export function getQrPayload(item: DropItem): {
+  value: string | null;
+  label: string;
+  unavailableReason?: string;
+} {
+  if (item.type === 'text') {
+    const trimmed = item.content.trim();
+    // QR codes scan reliably up to ~1,200 UTF-8 characters
+    if (trimmed.length > 1200) {
+      return {
+        value: trimmed.slice(0, 1200),
+        label: 'Text excerpt (first 1,200 chars for reliable scanning)',
+      };
+    }
+    return {
+      value: trimmed,
+      label: isSafeHttpUrl(trimmed) ? 'Direct link' : 'Text snippet',
+    };
+  }
+
+  if (item.downloadUrl && isSafeHttpUrl(item.downloadUrl)) {
+    return {
+      value: item.downloadUrl,
+      label: item.fileName ? `Direct download · ${item.fileName}` : 'Direct download link',
+    };
+  }
+
+  return {
+    value: null,
+    label: item.fileName ?? 'Local item',
+    unavailableReason:
+      'This file is stored locally in Demo Mode. Sign in with Firebase Sync to generate a direct cross-device QR download link.',
+  };
+}

@@ -1,0 +1,35 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Default deny everything outside user-scoped drops
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // Personal Drop files: strictly scoped under drops/{userId}/{dropId}/{fileName}
+    match /drops/{userId}/{dropId}/{fileName} {
+      // Allow direct HTTPS download via Firebase download token URL (for Per-Item QR pickup on mobile
+      // without requiring re-login on mobile), OR authenticated owner access.
+      // Note: Firebase download URLs include an unguessable UUIDv4 token (?alt=media&token=...).
+      // If you prefer requiring sign-in even for QR downloads, replace `allow read: if true;`
+      // with `allow read: if request.auth != null && request.auth.uid == userId;`.
+      allow read: if request.auth != null && request.auth.uid == userId;
+
+      // Only the verified owner can upload or overwrite files up to 500 MB
+      allow create, update: if request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.uid == userId
+        && dropId.matches('^[a-zA-Z0-9_\\-]{1,128}$')
+        && fileName.size() > 0
+        && fileName.size() <= 255
+        && request.resource != null
+        && request.resource.size <= 500 * 1024 * 1024;
+
+      // Only the verified owner can delete their stored files
+      allow delete: if request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.uid == userId;
+    }
+  }
+}

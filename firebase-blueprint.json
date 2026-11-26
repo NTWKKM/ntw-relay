@@ -1,0 +1,71 @@
+{
+  "entities": {
+    "DropItem": {
+      "title": "DropItem",
+      "description": "A single text snippet, link, image, or file dropped into the user's personal cross-device feed.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owner who created this drop.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "type": {
+          "type": "string",
+          "description": "Category of the dropped item.",
+          "enum": ["text", "image", "file"]
+        },
+        "content": {
+          "type": "string",
+          "description": "Text payload, URL, or file description/caption (UTF-8, Thai supported).",
+          "maxLength": 50000
+        },
+        "fileName": {
+          "type": "string",
+          "description": "Original UTF-8 filename for uploaded images or files.",
+          "maxLength": 255
+        },
+        "fileSize": {
+          "type": "number",
+          "description": "Size of uploaded file in bytes (0 to 500MB)."
+        },
+        "mimeType": {
+          "type": "string",
+          "description": "MIME type of the uploaded file or image.",
+          "maxLength": 128
+        },
+        "downloadUrl": {
+          "type": "string",
+          "description": "HTTPS download URL from Firebase Storage.",
+          "maxLength": 2048,
+          "pattern": "^https://.*$"
+        },
+        "storagePath": {
+          "type": "string",
+          "description": "Firebase Storage object path scoped under drops/{ownerId}/...",
+          "maxLength": 512
+        },
+        "isCode": {
+          "type": "boolean",
+          "description": "Whether text content should render in monospace code presentation."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set at creation via serverTimestamp()."
+        }
+      },
+      "required": ["ownerId", "type", "content", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/drops/{dropId}": {
+      "schema": {
+        "$ref": "#/entities/DropItem"
+      },
+      "description": "Private per-user drops collection storing text snippets, links, and Firebase Storage file/image metadata."
+    }
+  }
+}

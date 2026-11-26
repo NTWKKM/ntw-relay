@@ -1,0 +1,88 @@
+'use client';
+
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { onAuthStateChanged, type User } from 'firebase/auth';
+import { auth, isFirebaseConfigured, testConnection } from '@/lib/firebase';
+import { resolveAuthGuardDecision } from '@/lib/auth-guard';
+
+interface AuthContextValue {
+  user: User | null;
+  authReady: boolean;
+  refreshUser: (updated: User) => void;
+}
+
+const AuthContext = createContext<AuthContextValue>({
+  user: null,
+  authReady: !isFirebaseConfigured,
+  refreshUser: () => {},
+});
+
+export function useAuthUser(): AuthContextValue {
+  return useContext(AuthContext);
+}
+
+interface AuthGuardProps {
+  children: React.ReactNode;
+  redirectTo?: string;
+}
+
+/**
+ * Protects wrapped routes/components (such as Workspace) so unauthenticated users
+ * are redirected to /login and Firestore listeners never mount without an active Firebase session.
+ */
+export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(!isFirebaseConfigured || !auth);
+
+  useEffect(() => {
+    if (!isFirebaseConfigured || !auth) return;
+
+    void testConnection();
+    const unsub = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+      setAuthReady(true);
+    });
+    return () => unsub();
+  }, []);
+
+  const decision = resolveAuthGuardDecision({
+    isFirebaseConfigured: Boolean(isFirebaseConfigured && auth),
+    authReady,
+    hasUser: Boolean(user),
+  });
+
+  useEffect(() => {
+    if (decision === 'redirect_login') {
+      router.replace(redirectTo);
+    }
+  }, [decision, redirectTo, router]);
+
+  if (decision === 'loading' || decision === 'redirect_login') {
+    return (
+      <div
+        role="status"
+        aria-label={decision === 'redirect_login' ? 'Redirecting to login' : 'Checking authentication'}
+        className="min-h-screen bg-[#0B0D11] text-[#F4F5F7] flex flex-col items-center justify-center gap-3 p-6"
+      >
+        <div className="w-8 h-8 rounded-full border-2 border-zinc-800 border-t-indigo-500 animate-spin" />
+        <p className="text-xs text-zinc-500">
+          {decision === 'redirect_login' ? 'Redirecting to sign in...' : 'Verifying session...'}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        authReady,
+        refreshUser: (updated) => setUser(updated),
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
