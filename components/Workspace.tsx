@@ -9,7 +9,6 @@ import React, {
   useSyncExternalStore,
 } from 'react';
 import Link from 'next/link';
-import type { User } from 'firebase/auth';
 import {
   Cloud,
   CloudOff,
@@ -74,6 +73,12 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
+function revokeBlobUrl(url?: string) {
+  if (url && url.startsWith('blob:')) {
+    URL.revokeObjectURL(url);
+  }
+}
+
 interface WorkspaceProps {
   forceLocalDemo?: boolean;
 }
@@ -90,6 +95,17 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
   );
   const [cloudItems, setCloudItems] = useState<DropItem[]>([]);
   const [sessionLargeLocalItems, setSessionLargeLocalItems] = useState<DropItem[]>([]);
+  const sessionLargeLocalItemsRef = useRef<DropItem[]>(sessionLargeLocalItems);
+
+  useEffect(() => {
+    sessionLargeLocalItemsRef.current = sessionLargeLocalItems;
+  }, [sessionLargeLocalItems]);
+
+  useEffect(() => {
+    return () => {
+      sessionLargeLocalItemsRef.current.forEach((it) => revokeBlobUrl(it.downloadUrl));
+    };
+  }, []);
   const [loadingCloudFeed, setLoadingCloudFeed] = useState(isCloudSynced);
   const [uploads, setUploads] = useState<UploadTaskState[]>([]);
   const [filterTab, setFilterTab] = useState<FilterTab>('all');
@@ -110,12 +126,14 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
   const [cleaningUp, setCleaningUp] = useState(false);
   const cleanupPopoverRef = useRef<HTMLDivElement | null>(null);
 
+  const firebaseUserUid = firebaseUser?.uid ?? null;
+
   // Subscribe to Firestore onSnapshot strictly when auth is ready and user is authenticated
   useEffect(() => {
-    if (!authReady || !isCloudSynced || !firebaseUser) return;
+    if (!authReady || !isCloudSynced || !firebaseUserUid) return;
 
     const unsub = subscribeToUserDrops(
-      firebaseUser.uid,
+      firebaseUserUid,
       (nextCloudItems) => {
         setCloudItems(nextCloudItems);
         setLoadingCloudFeed(false);
@@ -126,7 +144,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
       }
     );
     return () => unsub();
-  }, [authReady, isCloudSynced, firebaseUser]);
+  }, [authReady, isCloudSynced, firebaseUserUid]);
 
   const handleSendText = useCallback(
     async (text: string) => {
@@ -319,7 +337,12 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
 
       const next = getLocalDemoSnapshot().filter((it) => it.id !== item.id);
       saveLocalDemoItems(next);
-      setSessionLargeLocalItems((prev) => prev.filter((it) => it.id !== item.id));
+      setSessionLargeLocalItems((prev) => {
+        for (const it of prev) {
+          if (it.id === item.id) revokeBlobUrl(it.downloadUrl);
+        }
+        return prev.filter((it) => it.id !== item.id);
+      });
     },
     [isCloudSynced]
   );
@@ -346,7 +369,12 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
       } else {
         const next = getLocalDemoSnapshot().filter((it) => !targetIds.has(it.id));
         saveLocalDemoItems(next);
-        setSessionLargeLocalItems((prev) => prev.filter((it) => !targetIds.has(it.id)));
+        setSessionLargeLocalItems((prev) => {
+          for (const it of prev) {
+            if (targetIds.has(it.id)) revokeBlobUrl(it.downloadUrl);
+          }
+          return prev.filter((it) => !targetIds.has(it.id));
+        });
       }
       setSyncNotice(`Cleared ${targetIds.size} ${targetIds.size === 1 ? 'item' : 'items'}.`);
     } catch (err) {
@@ -401,7 +429,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
     try {
       const updated = await reloadCurrentUser();
       if (updated) {
-        refreshUser({ ...updated } as User);
+        refreshUser(updated);
         setSyncNotice(updated.emailVerified ? 'Email verified.' : 'Still unverified.');
       }
     } catch (err) {

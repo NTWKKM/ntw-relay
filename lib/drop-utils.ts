@@ -279,6 +279,34 @@ export function getOldDropIds(
   return items.filter((item) => item.createdAtMs < cutoffMs).map((item) => item.id);
 }
 
+/** Maximum UTF-8 byte length for QR text payloads (safe for QR Level M & multi-byte scripts like Thai). */
+export const QR_MAX_TEXT_BYTES = 1000;
+
+const utf8Encoder = new TextEncoder();
+
+/**
+ * Truncates a string to at most `maxBytes` UTF-8 bytes on a Unicode code-point boundary.
+ */
+export function truncateToUtf8Bytes(
+  input: string,
+  maxBytes: number
+): { value: string; truncated: boolean } {
+  if (utf8Encoder.encode(input).length <= maxBytes) {
+    return { value: input, truncated: false };
+  }
+  let result = '';
+  let usedBytes = 0;
+  for (const ch of input) {
+    const chBytes = utf8Encoder.encode(ch).length;
+    if (usedBytes + chBytes > maxBytes) {
+      return { value: result, truncated: true };
+    }
+    result += ch;
+    usedBytes += chBytes;
+  }
+  return { value: result, truncated: false };
+}
+
 /**
  * Determines the primary QR payload for any drop card.
  */
@@ -292,15 +320,15 @@ export function getQrPayload(
 } {
   if (item.type === 'text') {
     const trimmed = item.content.trim();
-    // QR codes scan reliably up to ~1,200 UTF-8 characters
-    if (trimmed.length > 1200) {
+    const { value, truncated } = truncateToUtf8Bytes(trimmed, QR_MAX_TEXT_BYTES);
+    if (truncated) {
       return {
-        value: trimmed.slice(0, 1200),
-        label: 'Text excerpt (first 1,200 chars for reliable scanning)',
+        value,
+        label: `Text excerpt (first ${QR_MAX_TEXT_BYTES.toLocaleString()} bytes for reliable scanning)`,
       };
     }
     return {
-      value: trimmed,
+      value,
       label: isSafeHttpUrl(trimmed) ? 'Direct link' : 'Text snippet',
     };
   }

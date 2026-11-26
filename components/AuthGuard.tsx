@@ -9,12 +9,14 @@ import { resolveAuthGuardDecision } from '@/lib/auth-guard';
 interface AuthContextValue {
   user: User | null;
   authReady: boolean;
-  refreshUser: (updated: User) => void;
+  userVersion: number;
+  refreshUser: (updated?: User) => void;
 }
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   authReady: !isFirebaseConfigured,
+  userVersion: 0,
   refreshUser: () => {},
 });
 
@@ -34,6 +36,7 @@ interface AuthGuardProps {
 export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
+  const [userVersion, setUserVersion] = useState(0);
   const [authReady, setAuthReady] = useState(!isFirebaseConfigured || !auth);
 
   useEffect(() => {
@@ -78,7 +81,11 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
       value={{
         user,
         authReady,
-        refreshUser: (updated) => setUser(updated),
+        userVersion,
+        refreshUser: (updated) => {
+          if (updated) setUser(updated);
+          setUserVersion((v) => v + 1);
+        },
       }}
     >
       {children}

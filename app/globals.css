@@ -94,7 +94,7 @@ dialog.mwg-dialog {
   width: min(var(--dialog-width, 24rem), calc(100vw - 2rem));
   max-width: calc(100vw - 2rem);
   max-height: calc(100dvh - 2rem);
-  overflow: visible;
+  overflow: auto;
   opacity: 0;
   transform: translateY(6px) scale(0.985);
   transition:

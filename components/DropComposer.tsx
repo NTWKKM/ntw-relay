@@ -33,6 +33,13 @@ export function DropComposer({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const dragDepthRef = useRef(0);
+  const sendingRef = useRef(false);
+  const disabledRef = useRef(disabled);
+  const submitGenerationRef = useRef(0);
+
+  useEffect(() => {
+    disabledRef.current = disabled;
+  }, [disabled]);
 
   // Fallback JS auto-grow strictly for browsers without native CSS `field-sizing: content`
   useEffect(() => {
@@ -47,8 +54,10 @@ export function DropComposer({
   }, [text]);
 
   async function submitText() {
+    if (disabled || sendingRef.current) return;
     setError(null);
-    const trimmed = text.trim();
+    const submittedText = text;
+    const trimmed = submittedText.trim();
     if (!trimmed) {
       setError('Enter text or a link first.');
       textareaRef.current?.focus();
@@ -59,11 +68,21 @@ export function DropComposer({
       return;
     }
 
+    sendingRef.current = true;
+    submitGenerationRef.current += 1;
     setSending(true);
     try {
       await onSendText(trimmed);
-      setText('');
+      let cleared = false;
+      setText((current) => {
+        if (current === submittedText) {
+          cleared = true;
+          return '';
+        }
+        return current;
+      });
       if (
+        cleared &&
         textareaRef.current &&
         !(typeof CSS !== 'undefined' && CSS.supports?.('field-sizing', 'content'))
       ) {
@@ -72,6 +91,7 @@ export function DropComposer({
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Send failed.');
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   }
@@ -92,11 +112,16 @@ export function DropComposer({
   }
 
   async function handlePasteButton() {
+    if (disabled || sendingRef.current) return;
+    const pasteGeneration = submitGenerationRef.current;
     setError(null);
     try {
       if (navigator.clipboard?.read) {
         try {
           const items = await navigator.clipboard.read();
+          if (disabledRef.current || sendingRef.current || submitGenerationRef.current !== pasteGeneration) {
+            return;
+          }
           const imageFiles: File[] = [];
           for (const clipItem of items) {
             const imgType = clipItem.types.find((t) => t.startsWith('image/'));
@@ -107,6 +132,9 @@ export function DropComposer({
                 new File([blob], `clipboard-${Date.now()}.${ext}`, { type: imgType })
               );
             }
+          }
+          if (disabledRef.current || sendingRef.current || submitGenerationRef.current !== pasteGeneration) {
+            return;
           }
           if (imageFiles.length > 0) {
             await onUploadFiles(imageFiles);
@@ -119,6 +147,9 @@ export function DropComposer({
 
       if (navigator.clipboard?.readText) {
         const clipText = await navigator.clipboard.readText();
+        if (disabledRef.current || sendingRef.current || submitGenerationRef.current !== pasteGeneration) {
+          return;
+        }
         if (!clipText) {
           setError('Clipboard is empty.');
           return;
@@ -137,6 +168,7 @@ export function DropComposer({
     setError(null);
     const selected = Array.from(e.target.files ?? []);
     e.target.value = '';
+    if (disabled || sendingRef.current) return;
     if (selected.length > 0) {
       void onUploadFiles(selected);
     }
@@ -145,6 +177,7 @@ export function DropComposer({
   function handleDragEnter(e: React.DragEvent) {
     e.preventDefault();
     e.stopPropagation();
+    if (disabled || sending) return;
     dragDepthRef.current += 1;
     setIsDragging(true);
   }
@@ -168,6 +201,7 @@ export function DropComposer({
     e.stopPropagation();
     dragDepthRef.current = 0;
     setIsDragging(false);
+    if (disabled || sendingRef.current) return;
     setError(null);
 
     const droppedFiles = Array.from(e.dataTransfer.files ?? []);
@@ -205,6 +239,7 @@ export function DropComposer({
           id="file-upload-input"
           type="file"
           multiple
+          disabled={disabled || sending}
           onChange={handleFileChange}
           className="sr-only"
           aria-label="Attach files or images"
