@@ -27,7 +27,6 @@ import { DropComposer } from './DropComposer';
 import { DropCard } from './DropCard';
 import { ImageLightbox } from './ImageLightbox';
 import { QrModal, type QrModalData } from './QrModal';
-import { SetupDocsModal } from './SetupDocsModal';
 import {
   isFirebaseConfigured,
   reloadCurrentUser,
@@ -108,7 +107,6 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
   // Native <dialog> modals & native [popover] cleanup menu
   const [qrModal, setQrModal] = useState<QrModalData | null>(null);
   const [lightboxItem, setLightboxItem] = useState<DropItem | null>(null);
-  const [setupDocsOpen, setSetupDocsOpen] = useState(false);
   const [cleaningUp, setCleaningUp] = useState(false);
   const cleanupPopoverRef = useRef<HTMLDivElement | null>(null);
 
@@ -433,61 +431,14 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
     <div className="min-h-screen bg-[#F5F2EB] text-[#181715] dark:bg-[#121110] dark:text-[#F3EFE8] flex flex-col">
       {/* Compact single-row Top Bar (hides on scroll-down via CSS scroll-state query) */}
       <header className="mwg-top-bar h-14 bg-[#F5F2EB]/92 dark:bg-[#121110]/92 backdrop-blur-md border-b border-[#E2DCD0] dark:border-[#272420]">
-        <div className="max-w-4xl mx-auto h-full px-4 sm:px-6 flex items-center justify-between gap-2 sm:gap-8">
-          {/* Zone 1: Single-element Wordmark */}
+        <div className="max-w-4xl mx-auto h-full px-4 sm:px-6 flex items-center justify-between gap-4">
+          {/* Left: Single-element Wordmark */}
           <span className="font-[family-name:var(--font-display)] text-base sm:text-lg font-semibold tracking-tight text-[#181715] dark:text-[#F3EFE8] whitespace-nowrap shrink-0">
             NTW Relay
           </span>
 
-          {/* Zone 2: Minimal Navigation & Theme Toggle */}
-          <nav
-            aria-label="Workspace navigation"
-            className="flex items-center gap-2.5 sm:gap-6 text-sm font-medium text-[#5D5850] dark:text-[#A8A196]"
-          >
-            <button
-              type="button"
-              onClick={() => setSetupDocsOpen(true)}
-              className="hidden sm:inline hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              Setup
-            </button>
-
-            {isCloudSynced ? (
-              <button
-                type="button"
-                onClick={() => void signOutUser()}
-                className="hidden sm:inline hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                Sign out
-              </button>
-            ) : (
-              isFirebaseConfigured && (
-                <Link
-                  href="/login"
-                  className="hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
-                >
-                  Sign in
-                </Link>
-              )
-            )}
-
-            <button
-              type="button"
-              onClick={toggleTheme}
-              aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
-              title={theme === 'light' ? 'Dark mode' : 'Light mode'}
-              className="h-8 w-8 rounded-lg text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#EAE5DB] dark:hover:bg-[#22201C] transition-colors flex items-center justify-center cursor-pointer shrink-0"
-            >
-              {theme === 'light' ? (
-                <Moon className="w-4 h-4" aria-hidden="true" />
-              ) : (
-                <Sun className="w-4 h-4" aria-hidden="true" />
-              )}
-            </button>
-          </nav>
-
-          {/* Zone 3: Single Primary Action */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Top-right corner: Primary QR, Theme toggle, and Sign in/out */}
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
             <button
               type="button"
               onClick={handleOpenAppQr}
@@ -500,15 +451,40 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
               </span>
             </button>
 
-            {isCloudSynced && (
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+              title={theme === 'light' ? 'Dark mode' : 'Light mode'}
+              className="h-9 w-9 rounded-lg text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#EAE5DB] dark:hover:bg-[#22201C] transition-colors flex items-center justify-center cursor-pointer shrink-0"
+            >
+              {theme === 'light' ? (
+                <Moon className="w-4 h-4" aria-hidden="true" />
+              ) : (
+                <Sun className="w-4 h-4" aria-hidden="true" />
+              )}
+            </button>
+
+            {isCloudSynced ? (
               <button
                 type="button"
                 onClick={() => void signOutUser()}
                 aria-label="Sign out"
-                className="sm:hidden h-9 w-9 rounded-lg bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#DDD6C8] dark:border-[#2E2A25] text-[#5D5850] dark:text-[#A8A196] flex items-center justify-center cursor-pointer"
+                title="Sign out"
+                className="h-9 px-2.5 sm:px-3 rounded-lg text-xs sm:text-sm font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#EAE5DB] dark:hover:bg-[#22201C] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
               >
-                <LogOut className="w-4 h-4" aria-hidden="true" />
+                <LogOut className="w-4 h-4 sm:hidden" aria-hidden="true" />
+                <span className="hidden sm:inline">Sign out</span>
               </button>
+            ) : (
+              isFirebaseConfigured && (
+                <Link
+                  href="/login"
+                  className="h-9 px-2.5 sm:px-3 rounded-lg text-xs sm:text-sm font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#EAE5DB] dark:hover:bg-[#22201C] transition-colors flex items-center whitespace-nowrap shrink-0"
+                >
+                  Sign in
+                </Link>
+              )
             )}
           </div>
         </div>
@@ -759,16 +735,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
             </>
           )}
         </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <button
-            type="button"
-            onClick={() => setSetupDocsOpen(true)}
-            className="sm:hidden hover:text-[#181715] dark:hover:text-[#F3EFE8] underline underline-offset-4 cursor-pointer"
-          >
-            Setup
-          </button>
-          <span className="font-mono text-[11px]">Max 10 MB</span>
-        </div>
+        <span className="font-mono text-[11px] shrink-0">Max 10 MB</span>
       </footer>
 
       <QrModal data={qrModal} onClose={() => setQrModal(null)} />
@@ -780,7 +747,6 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
           handleOpenItemQr(it);
         }}
       />
-      <SetupDocsModal open={setupDocsOpen} onClose={() => setSetupDocsOpen(false)} />
     </div>
   );
 }
