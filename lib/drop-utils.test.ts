@@ -15,6 +15,7 @@ import {
 } from './drop-utils';
 import { mapFirebaseAuthError, validateEmailAuthInput } from './auth-errors';
 import { resolveAuthGuardDecision } from './auth-guard';
+import { getNextTheme, resolveStoredTheme } from './theme';
 import type { DropItem } from './types';
 
 test('isSafeHttpUrl allows http/https and rejects javascript/data schemes', () => {
@@ -39,7 +40,7 @@ test('parseTextSegments extracts URLs cleanly without trailing punctuation', () 
 test('looksLikeCode detects code snippets and leaves prose/Thai/URLs as normal text', () => {
   assert.equal(looksLikeCode('https://console.firebase.google.com'), false);
   assert.equal(looksLikeCode('อย่าลืมส่งไฟล์รายงานสรุปให้ทีมตอนเย็นนะครับ'), false);
-  assert.equal(looksLikeCode('{"projectId": "personal-drop", "sync": true}'), true);
+  assert.equal(looksLikeCode('{"projectId": "ntw-relay", "sync": true}'), true);
   assert.equal(
     looksLikeCode('const upload = async (file: File) => {\n  return await getDownloadURL(ref);\n};'),
     true
@@ -171,4 +172,13 @@ test('resolveAuthGuardDecision protects Workspace and Firestore when Firebase is
     resolveAuthGuardDecision({ isFirebaseConfigured: false, authReady: true, hasUser: false }),
     'allow_local_demo'
   );
+});
+
+test('material theme resolution defaults to Atelier Paper light and toggles cleanly', () => {
+  assert.equal(resolveStoredTheme(null), 'light');
+  assert.equal(resolveStoredTheme(undefined), 'light');
+  assert.equal(resolveStoredTheme('unexpected'), 'light');
+  assert.equal(resolveStoredTheme('dark'), 'dark');
+  assert.equal(getNextTheme('light'), 'dark');
+  assert.equal(getNextTheme('dark'), 'light');
 });

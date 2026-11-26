@@ -32,29 +32,33 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: Error) {
-    console.error('Personal Drop boundary caught error:', error);
+    console.error('NTW Relay boundary caught error:', error);
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-[#0B0D11] text-[#F4F5F7] flex items-center justify-center p-6">
-          <div className="w-full max-w-md rounded-xl bg-[#13161C] border border-zinc-800 p-6 space-y-4">
-            <div className="flex items-center gap-3 text-red-400">
+        <div className="min-h-screen bg-[#F5F2EB] text-[#181715] dark:bg-[#121110] dark:text-[#F3EFE8] flex items-center justify-center p-6">
+          <div className="w-full max-w-md rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] p-6 space-y-4">
+            <div className="flex items-center gap-3 text-[#B91C1C] dark:text-[#FCA5A5]">
               <AlertTriangle className="w-5 h-5 shrink-0" aria-hidden="true" />
-              <h1 className="text-base font-semibold text-[#F4F5F7]">Something went wrong</h1>
+              <h1 className="font-[family-name:var(--font-display)] text-lg font-medium text-[#181715] dark:text-[#F3EFE8]">
+                Something went wrong
+              </h1>
             </div>
-            <p className="text-sm text-zinc-400 leading-relaxed break-words">{this.state.message}</p>
+            <p className="text-sm text-[#5D5850] dark:text-[#A8A196] leading-relaxed break-words">
+              {this.state.message}
+            </p>
             <button
               type="button"
               onClick={() => {
                 this.setState({ hasError: false, message: '' });
                 window.location.reload();
               }}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#F4F5F7] text-[#0B0D11] text-sm font-medium hover:bg-zinc-200 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#181715] dark:bg-[#F3EFE8] text-[#FCFBF8] dark:text-[#121110] text-sm font-medium hover:bg-[#2E2C28] dark:hover:bg-[#E2DBD0] transition-colors cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" aria-hidden="true" />
-              Reload Workspace
+              Reload NTW Relay
             </button>
           </div>
         </div>

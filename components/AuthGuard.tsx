@@ -64,10 +64,10 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
       <div
         role="status"
         aria-label={decision === 'redirect_login' ? 'Redirecting to login' : 'Checking authentication'}
-        className="min-h-screen bg-[#0B0D11] text-[#F4F5F7] flex flex-col items-center justify-center gap-3 p-6"
+        className="min-h-screen bg-[#F5F2EB] text-[#181715] dark:bg-[#121110] dark:text-[#F3EFE8] flex flex-col items-center justify-center gap-3 p-6"
       >
-        <div className="w-8 h-8 rounded-full border-2 border-zinc-800 border-t-indigo-500 animate-spin" />
-        <p className="text-xs text-zinc-500">
+        <div className="w-7 h-7 rounded-full border-2 border-[#DDD6C8] dark:border-[#2C2925] border-t-[#181715] dark:border-t-[#F3EFE8] animate-spin" />
+        <p className="text-xs text-[#787268] dark:text-[#8A8378]">
           {decision === 'redirect_login' ? 'Redirecting to sign in...' : 'Verifying session...'}
         </p>
       </div>

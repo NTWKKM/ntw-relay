@@ -1,17 +1,28 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
+import Link from 'next/link';
 import type { User } from 'firebase/auth';
 import {
   Cloud,
   CloudOff,
   LogOut,
+  Moon,
   QrCode,
   Search,
+  Sun,
   Trash2,
   X,
 } from 'lucide-react';
 import { useAuthUser } from './AuthGuard';
+import { useMaterialTheme } from './ThemeProvider';
 import { DropComposer } from './DropComposer';
 import { DropCard } from './DropCard';
 import { ImageLightbox } from './ImageLightbox';
@@ -31,9 +42,11 @@ import {
   uploadCloudFileDrop,
 } from '@/lib/drops-service';
 import {
-  loadLocalDemoItems,
+  getLocalDemoSnapshot,
+  getServerDemoSnapshot,
   MAX_LOCAL_IMAGE_BYTES,
   saveLocalDemoItems,
+  subscribeLocalDemo,
 } from '@/lib/demo-store';
 import {
   filterDrops,
@@ -61,20 +74,35 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-export function Workspace() {
-  const { user: firebaseUser, authReady, refreshUser } = useAuthUser();
-  const isCloudSynced = Boolean(isFirebaseConfigured && firebaseUser);
+interface WorkspaceProps {
+  forceLocalDemo?: boolean;
+}
 
-  const [items, setItems] = useState<DropItem[]>(() =>
-    isCloudSynced ? [] : loadLocalDemoItems()
+export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
+  const { user: firebaseUser, authReady, refreshUser } = useAuthUser();
+  const { theme, toggleTheme } = useMaterialTheme();
+  const isCloudSynced = Boolean(!forceLocalDemo && isFirebaseConfigured && firebaseUser);
+
+  const localItems = useSyncExternalStore(
+    subscribeLocalDemo,
+    getLocalDemoSnapshot,
+    getServerDemoSnapshot
   );
-  const [loadingFeed, setLoadingFeed] = useState(isCloudSynced);
+  const [cloudItems, setCloudItems] = useState<DropItem[]>([]);
+  const [sessionLargeLocalItems, setSessionLargeLocalItems] = useState<DropItem[]>([]);
+  const [loadingCloudFeed, setLoadingCloudFeed] = useState(isCloudSynced);
   const [uploads, setUploads] = useState<UploadTaskState[]>([]);
   const [filterTab, setFilterTab] = useState<FilterTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [verifyingEmail, setVerifyingEmail] = useState(false);
+
+  const items = useMemo(
+    () => (isCloudSynced ? cloudItems : [...sessionLargeLocalItems, ...localItems]),
+    [isCloudSynced, cloudItems, sessionLargeLocalItems, localItems]
+  );
+  const loadingFeed = isCloudSynced && loadingCloudFeed;
 
   // Modals & Popovers
   const [qrModal, setQrModal] = useState<QrModalData | null>(null);
@@ -90,13 +118,13 @@ export function Workspace() {
 
     const unsub = subscribeToUserDrops(
       firebaseUser.uid,
-      (cloudItems) => {
-        setItems(cloudItems);
-        setLoadingFeed(false);
+      (nextCloudItems) => {
+        setCloudItems(nextCloudItems);
+        setLoadingCloudFeed(false);
       },
       (err) => {
         setSyncError(err.message);
-        setLoadingFeed(false);
+        setLoadingCloudFeed(false);
       }
     );
     return () => unsub();
@@ -132,12 +160,9 @@ export function Workspace() {
         isLocalOnly: true,
       };
 
-      setItems((prev) => {
-        const next = [newItem, ...prev];
-        const saved = saveLocalDemoItems(next);
-        if (!saved.ok && saved.error) setSyncNotice(saved.error);
-        return next;
-      });
+      const next = [newItem, ...getLocalDemoSnapshot()];
+      const saved = saveLocalDemoItems(next);
+      if (!saved.ok && saved.error) setSyncNotice(saved.error);
     },
     [isCloudSynced, firebaseUser]
   );
@@ -180,7 +205,6 @@ export function Workspace() {
                 },
               });
             } else {
-              // Local Demo Mode with realistic progress feedback
               const isImage = file.type.startsWith('image/');
               let dataUrl: string | undefined;
 
@@ -189,7 +213,7 @@ export function Workspace() {
               } else {
                 dataUrl = URL.createObjectURL(file);
                 setSyncNotice(
-                  `${safeName} is kept for this browser session. Enable Firebase Sync for persistent large file transfers.`
+                  `${safeName} is kept for this browser session. Sign in with Firebase Sync for persistent large file transfers.`
                 );
               }
 
@@ -220,14 +244,13 @@ export function Workspace() {
                 isLocalOnly: true,
               };
 
-              setItems((prev) => {
-                const next = [newItem, ...prev];
-                if (file.size <= MAX_LOCAL_IMAGE_BYTES) {
-                  const saved = saveLocalDemoItems(next);
-                  if (!saved.ok && saved.error) setSyncNotice(saved.error);
-                }
-                return next;
-              });
+              if (file.size <= MAX_LOCAL_IMAGE_BYTES) {
+                const next = [newItem, ...getLocalDemoSnapshot()];
+                const saved = saveLocalDemoItems(next);
+                if (!saved.ok && saved.error) setSyncNotice(saved.error);
+              } else {
+                setSessionLargeLocalItems((prev) => [newItem, ...prev]);
+              }
             }
 
             setUploads((prev) =>
@@ -295,13 +318,13 @@ export function Workspace() {
         return;
       }
 
-      setItems((prev) => {
-        const next = prev.map((it) =>
-          it.id === item.id ? { ...it, isCode: nextIsCode } : it
-        );
-        saveLocalDemoItems(next);
-        return next;
-      });
+      const next = getLocalDemoSnapshot().map((it) =>
+        it.id === item.id ? { ...it, isCode: nextIsCode } : it
+      );
+      saveLocalDemoItems(next);
+      setSessionLargeLocalItems((prev) =>
+        prev.map((it) => (it.id === item.id ? { ...it, isCode: nextIsCode } : it))
+      );
     },
     [isCloudSynced]
   );
@@ -313,11 +336,9 @@ export function Workspace() {
         return;
       }
 
-      setItems((prev) => {
-        const next = prev.filter((it) => it.id !== item.id);
-        saveLocalDemoItems(next);
-        return next;
-      });
+      const next = getLocalDemoSnapshot().filter((it) => it.id !== item.id);
+      saveLocalDemoItems(next);
+      setSessionLargeLocalItems((prev) => prev.filter((it) => it.id !== item.id));
     },
     [isCloudSynced]
   );
@@ -342,11 +363,9 @@ export function Workspace() {
         const toDelete = items.filter((it) => targetIds.has(it.id));
         await Promise.all(toDelete.map((it) => deleteCloudDrop(it)));
       } else {
-        setItems((prev) => {
-          const next = prev.filter((it) => !targetIds.has(it.id));
-          saveLocalDemoItems(next);
-          return next;
-        });
+        const next = getLocalDemoSnapshot().filter((it) => !targetIds.has(it.id));
+        saveLocalDemoItems(next);
+        setSessionLargeLocalItems((prev) => prev.filter((it) => !targetIds.has(it.id)));
       }
       setSyncNotice(`Removed ${targetIds.size} ${targetIds.size === 1 ? 'item' : 'items'}.`);
     } catch (err) {
@@ -360,7 +379,7 @@ export function Workspace() {
     const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
     setQrModal({
       title: 'Connect Mobile',
-      subtitle: 'Scan with your phone camera to open Personal Drop',
+      subtitle: 'Scan with your phone camera to open NTW Relay',
       value: appUrl,
     });
   }
@@ -431,44 +450,53 @@ export function Workspace() {
   );
 
   return (
-    <div className="min-h-screen bg-[#0B0D11] text-[#F4F5F7] flex flex-col">
-      {/* Top Bar Contract: Single row, 3 clean zones separated by gap-8 */}
-      <header className="sticky top-0 z-30 h-14 bg-[#0B0D11]/90 backdrop-blur-md border-b border-zinc-800/80">
+    <div className="min-h-screen bg-[#F5F2EB] text-[#181715] dark:bg-[#121110] dark:text-[#F3EFE8] flex flex-col">
+      {/* Top Bar Contract: Single row, 3 strict zones separated by gap-8 */}
+      <header className="sticky top-0 z-30 h-15 bg-[#F5F2EB]/92 dark:bg-[#121110]/92 backdrop-blur-md border-b border-[#E2DCD0] dark:border-[#272420]">
         <div className="max-w-5xl mx-auto h-full px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-6 sm:gap-8">
-          {/* Zone 1: Single-element Brand Wordmark */}
-          <span className="text-base font-semibold tracking-tight text-[#F4F5F7] whitespace-nowrap shrink-0">
-            Personal Drop
+          {/* Zone 1: Single-element Editorial Wordmark */}
+          <span className="font-[family-name:var(--font-display)] text-lg sm:text-xl font-semibold tracking-tight text-[#181715] dark:text-[#F3EFE8] whitespace-nowrap shrink-0">
+            NTW Relay
           </span>
 
           {/* Zone 2: Clean single-line utility text links */}
           <nav
-            aria-label="Workspace actions"
-            className="hidden sm:flex items-center gap-6 text-sm font-medium text-zinc-400"
+            aria-label="Workspace navigation"
+            className="hidden sm:flex items-center gap-6 text-sm font-medium text-[#5D5850] dark:text-[#A8A196]"
           >
             <button
               type="button"
               onClick={() => setSetupDocsOpen(true)}
-              className="hover:text-[#F4F5F7] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               Rules &amp; Guide
             </button>
-            {isCloudSynced && (
+            {isCloudSynced ? (
               <button
                 type="button"
                 onClick={() => void signOutUser()}
-                className="hover:text-[#F4F5F7] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                className="hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
               >
                 Sign Out
               </button>
+            ) : (
+              isFirebaseConfigured && (
+                <Link
+                  href="/login"
+                  className="hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
+                >
+                  Sign In
+                </Link>
+              )
             )}
           </nav>
 
-          {/* Zone 3: Primary Action + Mobile Sign Out */}
+          {/* Zone 3: Primary Action */}
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={handleOpenAppQr}
-              className="h-9 px-3.5 rounded-lg bg-[#F4F5F7] text-[#0B0D11] text-xs sm:text-sm font-medium hover:bg-zinc-200 transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0"
+              className="h-9 px-3.5 rounded-lg bg-[#181715] hover:bg-[#2E2C28] dark:bg-[#F3EFE8] dark:hover:bg-[#E2DBD0] text-[#FCFBF8] dark:text-[#121110] text-xs sm:text-sm font-medium transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0"
             >
               <QrCode className="w-4 h-4" aria-hidden="true" />
               <span>Connect Mobile</span>
@@ -479,7 +507,7 @@ export function Workspace() {
                 type="button"
                 onClick={() => void signOutUser()}
                 aria-label="Sign out"
-                className="sm:hidden h-9 w-9 rounded-lg bg-[#13161C] border border-zinc-800 text-zinc-300 hover:text-white flex items-center justify-center cursor-pointer"
+                className="sm:hidden h-9 w-9 rounded-lg bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#DDD6C8] dark:border-[#2E2A25] text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] flex items-center justify-center cursor-pointer"
               >
                 <LogOut className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -488,89 +516,119 @@ export function Workspace() {
         </div>
       </header>
 
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
-        {/* Sync Status Banner */}
-        {!isCloudSynced ? (
-          <div className="rounded-xl bg-[#13161C] border border-zinc-800/80 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm">
-            <div className="flex items-center gap-2.5 text-zinc-300 min-w-0">
-              <CloudOff className="w-4 h-4 text-zinc-400 shrink-0" aria-hidden="true" />
-              <p className="leading-snug">
-                <span className="font-medium text-[#F4F5F7]">Local Demo Mode</span>
-                {' — Add Firebase config to enable cross-device sync.'}
-              </p>
+      <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-9 space-y-6 sm:space-y-8">
+        {/* Quiet Sync Whisper & Optional Verification Bar */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs text-[#5D5850] dark:text-[#A8A196] min-w-0">
+              {isCloudSynced ? (
+                <>
+                  <Cloud className="w-3.5 h-3.5 text-[#15803D] dark:text-[#4ADE80] shrink-0" aria-hidden="true" />
+                  <span className="truncate">
+                    Firebase Live Sync ·{' '}
+                    <span className="font-medium text-[#181715] dark:text-[#F3EFE8]">
+                      {firebaseUser?.email}
+                    </span>
+                  </span>
+                </>
+              ) : (
+                <>
+                  <CloudOff className="w-3.5 h-3.5 text-[#787268] dark:text-[#8A8378] shrink-0" aria-hidden="true" />
+                  <span className="truncate">
+                    <span className="font-medium text-[#181715] dark:text-[#F3EFE8]">
+                      {forceLocalDemo ? 'Local Sandbox' : 'Local Demo'}
+                    </span>
+                    <span className="hidden sm:inline"> · Stored in this browser</span>
+                    {isFirebaseConfigured ? (
+                      <>
+                        {' · '}
+                        <Link
+                          href="/login"
+                          className="text-[#1D4ED8] dark:text-[#60A5FA] hover:underline underline-offset-4 font-medium whitespace-nowrap"
+                        >
+                          Sign in
+                        </Link>
+                      </>
+                    ) : null}
+                  </span>
+                </>
+              )}
             </div>
-            <button
-              type="button"
-              onClick={() => setSetupDocsOpen(true)}
-              className="sm:hidden text-xs font-medium text-zinc-400 hover:text-zinc-200 underline underline-offset-4 cursor-pointer whitespace-nowrap self-start"
-            >
-              Setup Guide
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-2.5">
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400 px-1">
-              <div className="flex items-center gap-2">
-                <Cloud className="w-3.5 h-3.5 text-emerald-400 shrink-0" aria-hidden="true" />
-                <span>
-                  Firebase Live Sync · Signed in as{' '}
-                  <span className="text-zinc-200 font-medium">{firebaseUser?.email}</span>
-                </span>
-              </div>
+
+            <div className="flex items-center gap-2.5 shrink-0">
               <button
                 type="button"
                 onClick={() => setSetupDocsOpen(true)}
-                className="sm:hidden text-zinc-400 hover:text-zinc-200 underline underline-offset-4 cursor-pointer"
+                className="sm:hidden text-xs font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] transition-colors cursor-pointer whitespace-nowrap"
               >
-                Rules &amp; Guide
+                Guide
+              </button>
+
+              <button
+                type="button"
+                onClick={toggleTheme}
+                aria-label={theme === 'light' ? 'Switch to Inkstone dark theme' : 'Switch to Paper light theme'}
+                className="h-8 px-2.5 rounded-lg border border-[#DDD6C8] dark:border-[#2E2A25] bg-[#FCFBF8] dark:bg-[#1A1917] text-xs font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+              >
+                {theme === 'light' ? (
+                  <>
+                    <Moon className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>Inkstone</span>
+                  </>
+                ) : (
+                  <>
+                    <Sun className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>Paper</span>
+                  </>
+                )}
               </button>
             </div>
-
-            {firebaseUser && !firebaseUser.emailVerified && (
-              <div className="rounded-xl bg-amber-500/10 border border-amber-500/25 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-200">
-                <p className="leading-relaxed">
-                  <span className="font-medium text-amber-100">Verify email to write drops</span>
-                  {' — '}
-                  Firestore rules require a verified email before saving or deleting items.
-                </p>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => void handleSendVerification()}
-                    disabled={verifyingEmail}
-                    className="h-8 px-3 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-100 font-medium transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50"
-                  >
-                    Send Verification Email
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleRefreshVerification()}
-                    disabled={verifyingEmail}
-                    className="h-8 px-3 rounded-lg bg-[#0B0D11] border border-zinc-700 text-zinc-200 hover:text-white font-medium transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50"
-                  >
-                    Refresh Status
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
-        )}
 
-        {/* Quick Input / Drop Zone */}
+          {isCloudSynced && firebaseUser && !firebaseUser.emailVerified && (
+            <div className="rounded-xl bg-[#FEF9EC] dark:bg-[#2A2010] border border-[#F3D9A4] dark:border-[#5C4318] px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-[#78350F] dark:text-[#FDE68A]">
+              <p className="leading-relaxed">
+                <span className="font-semibold">Verify email to write drops</span>
+                {' — '}
+                Firestore rules require a verified email before saving or deleting items.
+              </p>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => void handleSendVerification()}
+                  disabled={verifyingEmail}
+                  className="h-8 px-3 rounded-lg bg-[#92400E] hover:bg-[#78350F] text-[#FFFBEB] font-medium transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50"
+                >
+                  Send Verification Email
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleRefreshVerification()}
+                  disabled={verifyingEmail}
+                  className="h-8 px-3 rounded-lg bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E5C88B] dark:border-[#5C4318] text-[#78350F] dark:text-[#FDE68A] font-medium transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50"
+                >
+                  Refresh Status
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Architectural Dispatch Surface (Composer + File Drop Tray) */}
         <DropComposer
           onSendText={handleSendText}
           onUploadFiles={handleUploadFiles}
           uploads={uploads}
         />
 
-        {/* Optional Transient Notice */}
+        {/* Transient Notice / Error */}
         {(syncNotice || syncError) && (
           <div
             role="status"
             className={`rounded-lg px-4 py-2.5 text-xs sm:text-sm flex items-center justify-between gap-3 border ${
               syncError
-                ? 'bg-red-500/10 border-red-500/25 text-red-300'
-                : 'bg-[#13161C] border-zinc-800 text-zinc-300'
+                ? 'bg-[#FEF2F2] dark:bg-[#3A1717]/60 border-[#FECACA] dark:border-[#7F1D1D]/70 text-[#991B1B] dark:text-[#FCA5A5]'
+                : 'bg-[#FCFBF8] dark:bg-[#1A1917] border-[#E2DCD0] dark:border-[#2C2925] text-[#3D3A35] dark:text-[#D6CFC2]'
             }`}
           >
             <span className="break-words">{syncError || syncNotice}</span>
@@ -581,21 +639,21 @@ export function Workspace() {
                 setSyncError(null);
               }}
               aria-label="Dismiss notice"
-              className="h-7 w-7 rounded-md flex items-center justify-center text-zinc-400 hover:text-white shrink-0 cursor-pointer"
+              className="h-7 w-7 rounded-md flex items-center justify-center text-[#787268] dark:text-[#8A8378] hover:text-[#181715] dark:hover:text-[#F3EFE8] shrink-0 cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
         )}
 
-        {/* Feed Toolbar: Filter Tabs + Search + Clear Old */}
-        <section aria-label="Dropped items feed" className="space-y-4 pt-1">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        {/* Editorial Stream Section */}
+        <section aria-label="Dropped items feed" className="space-y-5">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-[#E2DCD0] dark:border-[#272420]">
             {/* Segmented Filter Tabs */}
             <div
               role="tablist"
               aria-label="Filter items by type"
-              className="flex items-center gap-1 p-1 rounded-xl bg-[#13161C] border border-zinc-800/85 overflow-x-auto"
+              className="flex items-center gap-1 p-1 rounded-xl bg-[#EBE6DC] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] overflow-x-auto"
             >
               {FILTER_TABS.map((t) => {
                 const active = filterTab === t.key;
@@ -606,14 +664,14 @@ export function Workspace() {
                     role="tab"
                     aria-selected={active}
                     onClick={() => setFilterTab(t.key)}
-                    className={`h-9 px-3.5 rounded-lg text-xs sm:text-sm font-medium transition-colors flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
+                    className={`h-8.5 px-3.5 rounded-lg text-xs sm:text-sm font-medium transition-colors flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
                       active
-                        ? 'bg-zinc-800 text-[#F4F5F7]'
-                        : 'text-zinc-400 hover:text-zinc-200'
+                        ? 'bg-[#FCFBF8] dark:bg-[#2A2723] text-[#181715] dark:text-[#F3EFE8] shadow-xs'
+                        : 'text-[#6B655C] dark:text-[#968F84] hover:text-[#181715] dark:hover:text-[#F3EFE8]'
                     }`}
                   >
                     <span>{t.label}</span>
-                    <span className="text-xs text-zinc-500 tabular-nums">
+                    <span className="font-mono text-[11px] text-[#787268] dark:text-[#8A8378] tabular-nums">
                       {counts[t.key]}
                     </span>
                   </button>
@@ -625,7 +683,7 @@ export function Workspace() {
             <div className="flex items-center gap-2.5 flex-1 md:flex-initial md:justify-end">
               <div className="relative flex-1 md:w-64">
                 <Search
-                  className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                  className="w-4 h-4 text-[#787268] dark:text-[#8A8378] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
                   aria-hidden="true"
                 />
                 <label htmlFor="feed-search" className="sr-only">
@@ -637,14 +695,14 @@ export function Workspace() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search text or filenames..."
-                  className="w-full h-10 rounded-xl bg-[#13161C] border border-zinc-800/85 pl-9 pr-8 text-sm text-[#F4F5F7] placeholder:text-zinc-500 focus:outline-none focus:border-indigo-500/70 transition-colors"
+                  className="w-full h-10 rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] pl-9 pr-8 text-sm text-[#181715] dark:text-[#F3EFE8] placeholder:text-[#8E877B] dark:placeholder:text-[#6E685F] focus:outline-none focus:border-[#1D4ED8] dark:focus:border-[#60A5FA] transition-colors"
                 />
                 {searchQuery && (
                   <button
                     type="button"
                     onClick={() => setSearchQuery('')}
                     aria-label="Clear search"
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 w-7 rounded-md flex items-center justify-center text-zinc-400 hover:text-white cursor-pointer"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 w-7 rounded-md flex items-center justify-center text-[#787268] hover:text-[#181715] dark:hover:text-[#F3EFE8] cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -658,7 +716,7 @@ export function Workspace() {
                   onClick={() => setCleanupOpen((prev) => !prev)}
                   disabled={items.length === 0 || cleaningUp}
                   aria-expanded={cleanupOpen}
-                  className="h-10 px-3.5 rounded-xl bg-[#13161C] border border-zinc-800/85 text-xs sm:text-sm font-medium text-zinc-300 hover:text-[#F4F5F7] hover:border-zinc-700 disabled:opacity-40 transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  className="h-10 px-3.5 rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] text-xs sm:text-sm font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:border-[#C5BDB0] dark:hover:border-[#443F38] disabled:opacity-40 transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                 >
                   <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                   <span>{cleaningUp ? 'Clearing...' : 'Clear Old'}</span>
@@ -667,16 +725,16 @@ export function Workspace() {
                 {cleanupOpen && (
                   <div
                     role="menu"
-                    className="absolute right-0 mt-2 w-60 rounded-xl bg-[#13161C] border border-zinc-800 shadow-2xl p-1.5 z-20 space-y-0.5"
+                    className="absolute right-0 mt-2 w-60 rounded-xl bg-[#FCFBF8] dark:bg-[#1E1C1A] border border-[#DDD6C8] dark:border-[#322E28] shadow-xl p-1.5 z-20 space-y-0.5"
                   >
                     <button
                       type="button"
                       role="menuitem"
                       onClick={() => void handleCleanup('24h')}
-                      className="w-full px-3 py-2.5 rounded-lg text-left text-xs sm:text-sm text-zinc-200 hover:bg-zinc-800/80 flex items-center justify-between gap-2 cursor-pointer"
+                      className="w-full px-3 py-2.5 rounded-lg text-left text-xs sm:text-sm text-[#181715] dark:text-[#F3EFE8] hover:bg-[#F2EFE7] dark:hover:bg-[#2A2723] flex items-center justify-between gap-2 cursor-pointer"
                     >
                       <span>Older than 24 hours</span>
-                      <span className="text-xs text-zinc-500 tabular-nums">
+                      <span className="font-mono text-xs text-[#787268] dark:text-[#8A8378] tabular-nums">
                         {olderThan24hCount}
                       </span>
                     </button>
@@ -684,22 +742,22 @@ export function Workspace() {
                       type="button"
                       role="menuitem"
                       onClick={() => void handleCleanup('7d')}
-                      className="w-full px-3 py-2.5 rounded-lg text-left text-xs sm:text-sm text-zinc-200 hover:bg-zinc-800/80 flex items-center justify-between gap-2 cursor-pointer"
+                      className="w-full px-3 py-2.5 rounded-lg text-left text-xs sm:text-sm text-[#181715] dark:text-[#F3EFE8] hover:bg-[#F2EFE7] dark:hover:bg-[#2A2723] flex items-center justify-between gap-2 cursor-pointer"
                     >
                       <span>Older than 7 days</span>
-                      <span className="text-xs text-zinc-500 tabular-nums">
+                      <span className="font-mono text-xs text-[#787268] dark:text-[#8A8378] tabular-nums">
                         {olderThan7dCount}
                       </span>
                     </button>
-                    <div className="my-1 border-t border-zinc-800" />
+                    <div className="my-1 border-t border-[#E2DCD0] dark:border-[#2C2925]" />
                     <button
                       type="button"
                       role="menuitem"
                       onClick={() => void handleCleanup('all')}
-                      className="w-full px-3 py-2.5 rounded-lg text-left text-xs sm:text-sm text-red-400 hover:bg-red-500/10 flex items-center justify-between gap-2 cursor-pointer"
+                      className="w-full px-3 py-2.5 rounded-lg text-left text-xs sm:text-sm text-[#B91C1C] dark:text-[#F87171] hover:bg-[#FEF2F2] dark:hover:bg-[#3A1717]/60 flex items-center justify-between gap-2 cursor-pointer"
                     >
                       <span>Clear all items</span>
-                      <span className="text-xs text-red-400/70 tabular-nums">
+                      <span className="font-mono text-xs opacity-75 tabular-nums">
                         {items.length}
                       </span>
                     </button>
@@ -711,24 +769,24 @@ export function Workspace() {
 
           {/* Feed Stream */}
           {loadingFeed ? (
-            <div className="space-y-3" aria-label="Loading drops">
+            <div className="space-y-3.5" aria-label="Loading drops">
               {[0, 1, 2].map((i) => (
                 <div
                   key={i}
-                  className="h-28 rounded-xl bg-[#13161C] border border-zinc-800/70 animate-pulse"
+                  className="h-32 rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] animate-pulse"
                 />
               ))}
             </div>
           ) : filteredItems.length === 0 ? (
-            <div className="rounded-xl bg-[#13161C] border border-zinc-800/80 py-14 px-6 text-center space-y-3">
-              <p className="text-sm font-medium text-zinc-200">
+            <div className="rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] py-16 px-6 text-center space-y-3">
+              <p className="font-[family-name:var(--font-display)] text-lg font-medium text-[#181715] dark:text-[#F3EFE8]">
                 {items.length === 0
-                  ? 'Your drop stream is empty'
-                  : 'No items match your current filter'}
+                  ? 'Your relay stream is clear'
+                  : 'No items match your filter'}
               </p>
-              <p className="text-xs text-zinc-500 max-w-sm mx-auto leading-relaxed">
+              <p className="text-sm text-[#6B655C] dark:text-[#968F84] max-w-sm mx-auto leading-relaxed">
                 {items.length === 0
-                  ? 'Type text above, drop any file, or press Cmd/Ctrl+V anywhere to send a screenshot across devices.'
+                  ? 'Write a note above, drop any file, or press Cmd/Ctrl+V anywhere to send a screenshot across your devices.'
                   : 'Try clearing your search query or switching back to the All tab.'}
               </p>
               {items.length > 0 && (
@@ -738,14 +796,14 @@ export function Workspace() {
                     setFilterTab('all');
                     setSearchQuery('');
                   }}
-                  className="mt-1 h-9 px-4 rounded-lg bg-zinc-800 text-xs font-medium text-zinc-200 hover:bg-zinc-700 transition-colors cursor-pointer"
+                  className="mt-2 h-9 px-4 rounded-lg bg-[#181715] dark:bg-[#F3EFE8] text-xs font-medium text-[#FCFBF8] dark:text-[#121110] hover:opacity-90 transition-opacity cursor-pointer"
                 >
                   Reset filters
                 </button>
               )}
             </div>
           ) : (
-            <div className="space-y-3" data-testid="drop-feed">
+            <div className="space-y-3.5" data-testid="drop-feed">
               {filteredItems.map((item) => (
                 <DropCard
                   key={item.id}

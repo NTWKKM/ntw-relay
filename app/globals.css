@@ -1,37 +1,69 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
-  --font-sans: var(--font-sans), var(--font-thai), system-ui, -apple-system, sans-serif;
-  --font-mono: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-sans: var(--font-manrope), var(--font-thai), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-ibm-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 @layer base {
   html {
-    color-scheme: dark;
+    color-scheme: light;
     font-family: var(--font-sans);
   }
 
+  html.dark {
+    color-scheme: dark;
+  }
+
   body {
-    letter-spacing: 0.01em;
-    word-spacing: 0.02em;
+    letter-spacing: 0.005em;
+  }
+
+  .dark body {
+    letter-spacing: 0.012em;
   }
 }
 
-/* Subtle dark scrollbars */
+/* Tactile subtle scrollbars matching Atelier Paper & Inkstone materials */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0b0d11;
+  background: #f5f2eb;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #242832;
+  background: #d6cfc2;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #343a47;
+  background: #bfb6a6;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: #121110;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #2f2b27;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #443f39;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

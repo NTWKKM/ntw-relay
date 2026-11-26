@@ -39,7 +39,7 @@ export function DropComposer({
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    const nextHeight = Math.min(Math.max(el.scrollHeight, 108), 240);
+    const nextHeight = Math.min(Math.max(el.scrollHeight, 120), 240);
     el.style.height = `${nextHeight}px`;
   }, [text]);
 
@@ -61,7 +61,7 @@ export function DropComposer({
       await onSendText(trimmed);
       setText('');
       if (textareaRef.current) {
-        textareaRef.current.style.height = '108px';
+        textareaRef.current.style.height = '120px';
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not send text.');
@@ -171,9 +171,10 @@ export function DropComposer({
 
   return (
     <section aria-label="Quick input and file drop" className="space-y-3">
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-stretch">
-        {/* Text & Link Box */}
-        <div className="rounded-xl bg-[#13161C] border border-zinc-800/90 p-4 flex flex-col justify-between gap-3 focus-within:border-zinc-700 transition-colors">
+      {/* Unified Architectural Dispatch Surface: single surface split by a 1px structural divider */}
+      <div className="rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] overflow-hidden grid grid-cols-1 lg:grid-cols-[1fr_296px] items-stretch focus-within:border-[#BFB7A8] dark:focus-within:border-[#454039] transition-colors">
+        {/* Left: Text, Link & Code Writing Desk */}
+        <div className="p-5 sm:p-6 flex flex-col justify-between gap-4">
           <div>
             <label htmlFor="drop-text-input" className="sr-only">
               Drop text, links, or code
@@ -188,33 +189,33 @@ export function DropComposer({
               }}
               onKeyDown={handleKeyDown}
               disabled={disabled || sending}
-              placeholder="Drop text, links, code, or Thai notes... (Cmd/Ctrl + V anywhere to paste screenshots)"
-              rows={3}
-              className="w-full min-h-[108px] resize-none bg-transparent text-sm sm:text-[15px] text-[#F4F5F7] placeholder:text-zinc-500 focus:outline-none leading-relaxed"
+              placeholder="Write a note, paste a URL or code snippet, or press Cmd/Ctrl+V anywhere to send a screenshot..."
+              rows={4}
+              className="w-full min-h-[120px] resize-none bg-transparent text-[15px] text-[#181715] dark:text-[#F3EFE8] placeholder:text-[#8E877B] dark:placeholder:text-[#6E685F] focus:outline-none leading-[1.65]"
             />
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-zinc-800/70">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-3.5 border-t border-[#ECE7DD] dark:border-[#272420]">
+            <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={handlePasteButton}
                 disabled={disabled || sending}
-                className="h-9 px-3 rounded-lg bg-[#0B0D11] border border-zinc-800 text-xs font-medium text-zinc-300 hover:text-[#F4F5F7] hover:border-zinc-700 transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+                className="h-9 px-3 rounded-lg bg-[#F5F2EB] dark:bg-[#141311] border border-[#DDD6C8] dark:border-[#2E2A25] text-xs font-medium text-[#3D3A35] dark:text-[#CFC8BC] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:border-[#C7BFB0] dark:hover:border-[#443F38] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
               >
                 <ClipboardPaste className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>Paste from Clipboard</span>
+                <span>Paste Clipboard</span>
               </button>
 
               {text.length > 0 && (
-                <span className="text-xs text-zinc-500 tabular-nums hidden sm:inline">
+                <span className="font-mono text-xs text-[#787268] dark:text-[#8A8378] tabular-nums hidden sm:inline">
                   {text.length.toLocaleString()} chars
                 </span>
               )}
             </div>
 
-            <div className="flex items-center gap-2.5">
-              <span className="hidden sm:inline-flex items-center gap-1 text-xs text-zinc-500">
+            <div className="flex items-center gap-3">
+              <span className="hidden sm:inline-flex items-center gap-1 font-mono text-[11px] text-[#787268] dark:text-[#8A8378]">
                 <span>Cmd/Ctrl</span>
                 <CornerDownLeft className="w-3 h-3" aria-hidden="true" />
               </span>
@@ -222,7 +223,7 @@ export function DropComposer({
                 type="button"
                 onClick={handleSubmitText}
                 disabled={disabled || sending}
-                className="h-9 px-4 rounded-lg bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white text-xs sm:text-sm font-medium transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+                className="h-9 px-4 rounded-lg bg-[#181715] hover:bg-[#2E2C28] dark:bg-[#F3EFE8] dark:hover:bg-[#E2DBD0] disabled:opacity-50 text-[#FCFBF8] dark:text-[#121110] text-xs sm:text-sm font-medium transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
               >
                 <Send className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>{sending ? 'Sending...' : 'Send'}</span>
@@ -231,16 +232,16 @@ export function DropComposer({
           </div>
         </div>
 
-        {/* File & Image Drop Zone */}
+        {/* Right: Tactile File & Screenshot Drop Tray */}
         <div
           onDragEnter={handleDragEnter}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className={`rounded-xl border border-dashed p-5 flex flex-col items-center justify-center text-center gap-3 transition-colors ${
+          className={`p-5 sm:p-6 border-t lg:border-t-0 lg:border-l flex flex-col items-center justify-center text-center gap-3.5 transition-colors ${
             isDragging
-              ? 'bg-indigo-500/10 border-indigo-400 text-indigo-100'
-              : 'bg-[#13161C] border-zinc-800 hover:border-zinc-700 text-zinc-300'
+              ? 'bg-[#1D4ED8]/8 dark:bg-[#60A5FA]/10 border-[#1D4ED8] dark:border-[#60A5FA]'
+              : 'bg-[#F7F4EE] dark:bg-[#161513] border-[#E2DCD0] dark:border-[#2C2925]'
           }`}
         >
           <input
@@ -254,25 +255,25 @@ export function DropComposer({
           />
 
           <div
-            className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-colors ${
+            className={`w-10 h-10 rounded-lg flex items-center justify-center border transition-colors ${
               isDragging
-                ? 'bg-indigo-500/20 border-indigo-400/50 text-indigo-300'
-                : 'bg-[#0B0D11] border-zinc-800 text-zinc-400'
+                ? 'bg-[#1D4ED8]/12 dark:bg-[#60A5FA]/15 border-[#1D4ED8]/40 text-[#1D4ED8] dark:text-[#60A5FA]'
+                : 'bg-[#FCFBF8] dark:bg-[#1E1C1A] border-[#DDD6C8] dark:border-[#2E2A25] text-[#5D5850] dark:text-[#A8A196]'
             }`}
           >
             {isDragging ? (
-              <FileUp className="w-5 h-5" aria-hidden="true" />
+              <FileUp className="w-4 h-4" aria-hidden="true" />
             ) : (
-              <Upload className="w-5 h-5" aria-hidden="true" />
+              <Upload className="w-4 h-4" aria-hidden="true" />
             )}
           </div>
 
           <div className="space-y-1">
-            <p className="text-sm font-medium text-[#F4F5F7]">
-              {isDragging ? 'Release to upload' : 'Drop files or images'}
+            <p className="text-sm font-semibold text-[#181715] dark:text-[#F3EFE8]">
+              {isDragging ? 'Release to transfer' : 'Drop files or images'}
             </p>
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              Multiple files supported · Paste screenshot with Cmd/Ctrl+V
+            <p className="text-xs text-[#6B655C] dark:text-[#968F84] leading-relaxed max-w-[220px]">
+              Multi-file handoff up to 500 MB · Paste screenshots anywhere
             </p>
           </div>
 
@@ -280,7 +281,7 @@ export function DropComposer({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={disabled}
-            className="h-9 px-4 rounded-lg bg-[#0B0D11] border border-zinc-800 text-xs font-medium text-zinc-200 hover:text-white hover:border-zinc-700 transition-colors cursor-pointer whitespace-nowrap shrink-0"
+            className="h-9 px-4 rounded-lg bg-[#FCFBF8] dark:bg-[#1E1C1A] border border-[#DDD6C8] dark:border-[#322E28] text-xs font-medium text-[#181715] dark:text-[#F3EFE8] hover:border-[#B9B0A0] dark:hover:border-[#4A453E] transition-colors cursor-pointer whitespace-nowrap shrink-0"
           >
             Choose Files
           </button>
@@ -291,7 +292,7 @@ export function DropComposer({
       {error && (
         <div
           role="alert"
-          className="rounded-lg bg-red-500/10 border border-red-500/25 px-4 py-2.5 text-xs sm:text-sm text-red-300 flex items-center gap-2"
+          className="rounded-lg bg-[#FEF2F2] dark:bg-[#3A1717]/60 border border-[#FECACA] dark:border-[#7F1D1D]/70 px-4 py-2.5 text-xs sm:text-sm text-[#991B1B] dark:text-[#FCA5A5] flex items-center gap-2"
         >
           <AlertCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
           <span>{error}</span>
@@ -302,22 +303,26 @@ export function DropComposer({
       {uploads.length > 0 && (
         <div
           aria-live="polite"
-          className="rounded-xl bg-[#13161C] border border-zinc-800/90 divide-y divide-zinc-800/70"
+          className="rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] divide-y divide-[#ECE7DD] dark:divide-[#272420]"
         >
           {uploads.map((task) => (
-            <div key={task.id} className="px-4 py-3 space-y-2">
+            <div key={task.id} className="px-5 py-3.5 space-y-2">
               <div className="flex items-center justify-between gap-3 text-xs">
                 <div className="flex items-center gap-2 min-w-0">
                   {task.status === 'done' ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />
+                    <CheckCircle2 className="w-4 h-4 text-[#15803D] dark:text-[#4ADE80] shrink-0" aria-hidden="true" />
                   ) : task.status === 'error' ? (
-                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0" aria-hidden="true" />
+                    <AlertCircle className="w-4 h-4 text-[#B91C1C] dark:text-[#F87171] shrink-0" aria-hidden="true" />
                   ) : null}
-                  <span className="font-medium text-zinc-200 truncate">{task.fileName}</span>
+                  <span className="font-medium text-[#181715] dark:text-[#F3EFE8] truncate">
+                    {task.fileName}
+                  </span>
                 </div>
-                <div className="text-zinc-400 tabular-nums shrink-0">
+                <div className="font-mono text-[11px] text-[#6B655C] dark:text-[#968F84] tabular-nums shrink-0">
                   {task.status === 'error' ? (
-                    <span className="text-red-400">{task.errorMessage || 'Upload failed'}</span>
+                    <span className="text-[#B91C1C] dark:text-[#F87171]">
+                      {task.errorMessage || 'Upload failed'}
+                    </span>
                   ) : (
                     <>
                       {formatBytes(task.bytesTransferred)} / {formatBytes(task.fileSize)}
@@ -325,19 +330,21 @@ export function DropComposer({
                         <> · {formatBytes(task.speedBps)}/s</>
                       )}
                       {' · '}
-                      <span className="text-zinc-200 font-medium">{task.progress}%</span>
+                      <span className="text-[#181715] dark:text-[#F3EFE8] font-medium">
+                        {task.progress}%
+                      </span>
                     </>
                   )}
                 </div>
               </div>
-              <div className="h-1.5 w-full rounded-full bg-[#0B0D11] overflow-hidden">
+              <div className="h-1 w-full rounded-full bg-[#EAE5DB] dark:bg-[#272420] overflow-hidden">
                 <div
                   className={`h-full transition-all duration-150 ${
                     task.status === 'error'
-                      ? 'bg-red-500'
+                      ? 'bg-[#B91C1C] dark:bg-[#F87171]'
                       : task.status === 'done'
-                        ? 'bg-emerald-500'
-                        : 'bg-indigo-500'
+                        ? 'bg-[#15803D] dark:bg-[#4ADE80]'
+                        : 'bg-[#1D4ED8] dark:bg-[#60A5FA]'
                   }`}
                   style={{ width: `${task.progress}%` }}
                 />

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { motion } from 'motion/react';
 import { Check, Copy, X } from 'lucide-react';
 import { copyTextToClipboard } from '@/lib/clipboard-actions';
 import { firebaseRuntimeConfig } from '@/lib/firebase';
@@ -149,19 +150,25 @@ firebase init apphosting`;
       role="dialog"
       aria-modal="true"
       aria-labelledby="setup-docs-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#181715]/60 dark:bg-black/75 backdrop-blur-xs p-4"
       onClick={onClose}
     >
-      <div
-        className="w-full max-w-3xl max-h-[86vh] flex flex-col rounded-xl bg-[#13161C] border border-zinc-800 shadow-2xl overflow-hidden"
+      <motion.div
+        initial={{ opacity: 0, scale: 0.985, y: 6 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+        className="w-full max-w-3xl max-h-[86vh] flex flex-col rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#DDD6C8] dark:border-[#2E2A25] shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-zinc-800">
+        <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-[#E2DCD0] dark:border-[#272420]">
           <div>
-            <h2 id="setup-docs-title" className="text-base font-semibold text-[#F4F5F7]">
-              Firebase Rules, CORS & Deployment Guide
+            <h2
+              id="setup-docs-title"
+              className="font-[family-name:var(--font-display)] text-lg font-medium text-[#181715] dark:text-[#F3EFE8]"
+            >
+              Firebase Rules, CORS &amp; Deployment Guide
             </h2>
-            <p className="text-xs text-zinc-400 mt-0.5">
+            <p className="text-xs text-[#6B655C] dark:text-[#968F84] mt-0.5">
               Production configuration included in firestore.rules, storage.rules, cors.json, and DEPLOYMENT_GUIDE.md
             </p>
           </div>
@@ -169,14 +176,14 @@ firebase init apphosting`;
             type="button"
             onClick={onClose}
             aria-label="Close setup guide"
-            className="h-9 w-9 rounded-lg flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+            className="h-9 w-9 rounded-lg flex items-center justify-center text-[#787268] dark:text-[#8A8378] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#F2EFE7] dark:hover:bg-[#272420] transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="flex items-center justify-between gap-3 px-6 py-3 border-b border-zinc-800/80 overflow-x-auto">
-          <div className="flex items-center gap-1 p-1 rounded-lg bg-[#0B0D11] border border-zinc-800/80">
+        <div className="flex items-center justify-between gap-3 px-6 py-3 border-b border-[#E2DCD0] dark:border-[#272420] overflow-x-auto">
+          <div className="flex items-center gap-1 p-1 rounded-lg bg-[#EBE6DC] dark:bg-[#141311] border border-[#E2DCD0] dark:border-[#272420]">
             {(
               [
                 ['firestore', 'firestore.rules'],
@@ -194,8 +201,8 @@ firebase init apphosting`;
                 }}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                   tab === key
-                    ? 'bg-zinc-800 text-[#F4F5F7]'
-                    : 'text-zinc-400 hover:text-zinc-200'
+                    ? 'bg-[#FCFBF8] dark:bg-[#2A2723] text-[#181715] dark:text-[#F3EFE8] shadow-xs'
+                    : 'text-[#6B655C] dark:text-[#968F84] hover:text-[#181715] dark:hover:text-[#F3EFE8]'
                 }`}
               >
                 {label}
@@ -206,34 +213,38 @@ firebase init apphosting`;
           <button
             type="button"
             onClick={handleCopy}
-            className="h-9 px-3 rounded-lg bg-zinc-800/90 text-xs font-medium text-zinc-200 hover:bg-zinc-700 transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer whitespace-nowrap"
+            className="h-9 px-3 rounded-lg bg-[#F2EFE7] dark:bg-[#25221E] border border-[#DDD6C8] dark:border-[#322E28] text-xs font-medium text-[#181715] dark:text-[#F3EFE8] hover:border-[#BFB7A8] dark:hover:border-[#4A453E] transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer whitespace-nowrap"
           >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-            <span>{copied ? 'Copied!' : 'Copy'}</span>
+            {copied ? (
+              <Check className="w-3.5 h-3.5 text-[#15803D] dark:text-[#4ADE80]" />
+            ) : (
+              <Copy className="w-3.5 h-3.5" />
+            )}
+            <span>{copied ? 'Copied' : 'Copy'}</span>
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
-          <pre className="rounded-lg bg-[#0B0D11] border border-zinc-800 p-4 text-xs font-mono text-zinc-200 overflow-x-auto leading-relaxed">
+          <pre className="rounded-lg bg-[#F2EFE7] dark:bg-[#131210] border border-[#E2DCD0] dark:border-[#272420] p-4 text-xs font-mono text-[#1F1D1A] dark:text-[#E5DFD5] overflow-x-auto leading-relaxed">
             <code>{activeSnippet}</code>
           </pre>
 
           {tab === 'deploy' && (
             <div className="space-y-2.5">
-              <h3 className="text-sm font-medium text-[#F4F5F7]">
+              <h3 className="text-sm font-semibold text-[#181715] dark:text-[#F3EFE8]">
                 Large-File Resumable Transfer Benchmarks (100 Mbps Fiber)
               </h3>
-              <div className="overflow-x-auto rounded-lg border border-zinc-800">
+              <div className="overflow-x-auto rounded-lg border border-[#E2DCD0] dark:border-[#272420]">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-[#0B0D11] text-zinc-400 border-b border-zinc-800">
+                  <thead className="bg-[#F2EFE7] dark:bg-[#141311] text-[#5D5850] dark:text-[#A8A196] border-b border-[#E2DCD0] dark:border-[#272420]">
                     <tr>
-                      <th className="py-2.5 px-3.5 font-medium">Payload Size</th>
-                      <th className="py-2.5 px-3.5 font-medium">Typical Time</th>
-                      <th className="py-2.5 px-3.5 font-medium">Peak Browser RAM</th>
-                      <th className="py-2.5 px-3.5 font-medium">Optimization</th>
+                      <th className="py-2.5 px-3.5 font-semibold">Payload Size</th>
+                      <th className="py-2.5 px-3.5 font-semibold">Typical Time</th>
+                      <th className="py-2.5 px-3.5 font-semibold">Peak Browser RAM</th>
+                      <th className="py-2.5 px-3.5 font-semibold">Optimization</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-800/80 text-zinc-300 tabular-nums">
+                  <tbody className="divide-y divide-[#ECE7DD] dark:divide-[#272420] text-[#3D3A35] dark:text-[#CFC8BC] tabular-nums">
                     <tr>
                       <td className="py-2.5 px-3.5 font-mono">1 MB PNG</td>
                       <td className="py-2.5 px-3.5">~0.4 s</td>
@@ -264,7 +275,7 @@ firebase init apphosting`;
             </div>
           )}
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
