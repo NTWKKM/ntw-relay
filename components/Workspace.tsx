@@ -457,68 +457,8 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
 
   return (
     <div className="min-h-screen bg-[#F5F2EB] text-[#181715] dark:bg-[#121110] dark:text-[#F3EFE8] flex flex-col">
-      {/* Compact single-row Top Bar (hides on scroll-down via CSS scroll-state query) */}
-      <header className="mwg-top-bar h-14 bg-[#F5F2EB]/92 dark:bg-[#121110]/92 backdrop-blur-md border-b border-[#E2DCD0] dark:border-[#272420]">
-        <div className="max-w-4xl mx-auto h-full px-4 sm:px-6 flex items-center justify-between gap-4">
-          {/* Left: Single-element Wordmark */}
-          <span className="font-[family-name:var(--font-display)] text-base sm:text-lg font-semibold tracking-tight text-[#181715] dark:text-[#F3EFE8] whitespace-nowrap shrink-0">
-            NTW Relay
-          </span>
-
-          {/* Top-right corner: Primary QR, Theme toggle, and Sign in/out */}
-          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-            <button
-              type="button"
-              onClick={handleOpenAppQr}
-              aria-label="Mobile QR"
-              className="h-9 px-3 sm:px-3.5 rounded-lg bg-[#181715] hover:bg-[#2E2C28] dark:bg-[#F3EFE8] dark:hover:bg-[#E2DBD0] text-[#FCFBF8] dark:text-[#121110] text-xs sm:text-sm font-medium transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
-            >
-              <QrCode className="w-3.5 h-3.5" aria-hidden="true" />
-              <span>
-                <span className="hidden sm:inline">Mobile </span>QR
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={toggleTheme}
-              aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
-              title={theme === 'light' ? 'Dark mode' : 'Light mode'}
-              className="h-9 w-9 rounded-lg text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#EAE5DB] dark:hover:bg-[#22201C] transition-colors flex items-center justify-center cursor-pointer shrink-0"
-            >
-              {theme === 'light' ? (
-                <Moon className="w-4 h-4" aria-hidden="true" />
-              ) : (
-                <Sun className="w-4 h-4" aria-hidden="true" />
-              )}
-            </button>
-
-            {isCloudSynced ? (
-              <button
-                type="button"
-                onClick={() => void signOutUser()}
-                aria-label="Sign out"
-                title="Sign out"
-                className="h-9 px-2.5 sm:px-3 rounded-lg text-xs sm:text-sm font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#EAE5DB] dark:hover:bg-[#22201C] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
-              >
-                <LogOut className="w-4 h-4 sm:hidden" aria-hidden="true" />
-                <span className="hidden sm:inline">Sign out</span>
-              </button>
-            ) : (
-              isFirebaseConfigured && (
-                <Link
-                  href="/login"
-                  className="h-9 px-2.5 sm:px-3 rounded-lg text-xs sm:text-sm font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#EAE5DB] dark:hover:bg-[#22201C] transition-colors flex items-center whitespace-nowrap shrink-0"
-                >
-                  Sign in
-                </Link>
-              )
-            )}
-          </div>
-        </div>
-      </header>
-
       <main className="flex-1 w-full max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+        <h1 className="sr-only">NTW Relay</h1>
         {/* Email verification prompt (only shown when actually unverified) */}
         {isCloudSynced && firebaseUser && !firebaseUser.emailVerified && (
           <div className="rounded-xl bg-[#FEF9EC] dark:bg-[#2A2010] border border-[#F3D9A4] dark:border-[#5C4318] px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs text-[#78350F] dark:text-[#FDE68A]">
@@ -748,22 +688,86 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
         </section>
       </main>
 
-      {/* Quiet single-line footer with real sync state */}
-      <footer className="max-w-4xl w-full mx-auto px-4 sm:px-6 py-5 border-t border-[#E2DCD0]/70 dark:border-[#272420]/70 flex items-center justify-between gap-3 text-xs text-[#787268] dark:text-[#8A8378]">
-        <div className="flex items-center gap-1.5 min-w-0">
+      {/* Unified quiet footer: Brand, sync identity, limit, and workspace controls */}
+      <footer className="max-w-4xl w-full mx-auto px-4 sm:px-6 py-4 border-t border-[#E2DCD0]/70 dark:border-[#272420]/70 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs text-[#787268] dark:text-[#8A8378]">
+        <div className="flex items-center flex-wrap gap-x-2.5 gap-y-1 min-w-0">
+          <span className="font-[family-name:var(--font-display)] text-sm font-semibold tracking-tight text-[#181715] dark:text-[#F3EFE8] whitespace-nowrap shrink-0">
+            NTW Relay
+          </span>
+          <span className="text-[#D4CEC2] dark:text-[#3A3630] select-none" aria-hidden="true">
+            ·
+          </span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            {isCloudSynced ? (
+              <>
+                <Cloud
+                  className="w-3.5 h-3.5 text-[#15803D] dark:text-[#4ADE80] shrink-0"
+                  aria-hidden="true"
+                />
+                <span className="truncate">{firebaseUser?.email}</span>
+              </>
+            ) : (
+              <>
+                <CloudOff className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                <span>Local sandbox</span>
+              </>
+            )}
+          </div>
+          <span className="text-[#D4CEC2] dark:text-[#3A3630] select-none" aria-hidden="true">
+            ·
+          </span>
+          <span className="font-mono text-[11px] shrink-0">Max 10 MB</span>
+        </div>
+
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={handleOpenAppQr}
+            aria-label="Mobile QR"
+            className="h-8 px-2.5 sm:px-3 rounded-lg bg-[#181715] hover:bg-[#2E2C28] dark:bg-[#F3EFE8] dark:hover:bg-[#E2DBD0] text-[#FCFBF8] dark:text-[#121110] text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+          >
+            <QrCode className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>
+              <span className="hidden sm:inline">Mobile </span>QR
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+            title={theme === 'light' ? 'Dark mode' : 'Light mode'}
+            className="h-8 w-8 rounded-lg text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#EAE5DB] dark:hover:bg-[#22201C] transition-colors flex items-center justify-center cursor-pointer shrink-0"
+          >
+            {theme === 'light' ? (
+              <Moon className="w-3.5 h-3.5" aria-hidden="true" />
+            ) : (
+              <Sun className="w-3.5 h-3.5" aria-hidden="true" />
+            )}
+          </button>
+
           {isCloudSynced ? (
-            <>
-              <Cloud className="w-3.5 h-3.5 text-[#15803D] dark:text-[#4ADE80] shrink-0" aria-hidden="true" />
-              <span className="truncate">{firebaseUser?.email}</span>
-            </>
+            <button
+              type="button"
+              onClick={() => void signOutUser()}
+              aria-label="Sign out"
+              title="Sign out"
+              className="h-8 px-2.5 rounded-lg text-xs font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#EAE5DB] dark:hover:bg-[#22201C] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <LogOut className="w-3.5 h-3.5 sm:hidden" aria-hidden="true" />
+              <span className="hidden sm:inline">Sign out</span>
+            </button>
           ) : (
-            <>
-              <CloudOff className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-              <span>Local sandbox</span>
-            </>
+            isFirebaseConfigured && (
+              <Link
+                href="/login"
+                className="h-8 px-2.5 rounded-lg text-xs font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#EAE5DB] dark:hover:bg-[#22201C] transition-colors flex items-center whitespace-nowrap shrink-0"
+              >
+                Sign in
+              </Link>
+            )
           )}
         </div>
-        <span className="font-mono text-[11px] shrink-0">Max 10 MB</span>
       </footer>
 
       <QrModal data={qrModal} onClose={() => setQrModal(null)} />

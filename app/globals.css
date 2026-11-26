@@ -17,7 +17,6 @@
 
   html {
     font-family: var(--font-sans);
-    container-type: scroll-state;
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   }
@@ -57,24 +56,6 @@
     background: var(--scrollbar-thumb);
     border-radius: 4px;
   }
-}
-
-/* Content-first compact top bar: hide on scroll down, reveal on scroll up via scroll-state container query */
-.mwg-top-bar {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@container scroll-state((scrolled: bottom) and (scrollable: top)) {
-  .mwg-top-bar {
-    transform: translateY(-100%);
-  }
-}
-
-.mwg-top-bar:focus-within {
-  transform: none;
 }
 
 /* Auto-sizing textarea using native CSS field-sizing */
