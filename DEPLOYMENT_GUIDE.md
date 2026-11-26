@@ -4,8 +4,9 @@ NTW Relay stores **everything in Cloud Firestore**: text drops, file metadata, a
 themselves. No Cloud Storage bucket, Blaze plan, or CORS configuration is required.
 
 ## 1. Environment Variables & Console Checklist
-Copy `.env.example` to `.env.local` only if you need to override `firebase-applet-config.json`
-(`NEXT_PUBLIC_FIREBASE_*`). Enable **Email/Password** and/or **Google** sign-in in Firebase Console.
+Copy `.env.example` to `.env.local` and fill in your `NEXT_PUBLIC_FIREBASE_*` values for local development.
+For GitHub Pages deployment, configure the same `NEXT_PUBLIC_FIREBASE_*` keys in your GitHub repository under **Settings → Secrets and variables → Actions** (either **Variables** or **Secrets**).
+Enable **Email/Password** and/or **Google** sign-in in Firebase Console.
 Writes require a verified email.
 - **Authorized domains**: Add `ntwkkm.github.io` (and any custom domain) under Firebase Console → Authentication → Settings → Authorized domains so Google Sign-In works on GitHub Pages.
 - **Web API key restrictions**: Restrict the Firebase browser API key in Google Cloud Console to allowed HTTP referrers (`localhost`, `127.0.0.1`, `ntwkkm.github.io`, `gen-lang-client-0817705965.firebaseapp.com`).

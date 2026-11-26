@@ -17,7 +17,6 @@ import {
   getFirestore,
   type Firestore,
 } from 'firebase/firestore';
-import appletConfig from '../firebase-applet-config.json';
 
 interface FirebaseRuntimeConfig {
   apiKey: string;
@@ -30,9 +29,8 @@ interface FirebaseRuntimeConfig {
 }
 
 function resolveFirebaseConfig(): FirebaseRuntimeConfig | null {
-  const fromApplet: Partial<FirebaseRuntimeConfig> = appletConfig ?? {};
-  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || fromApplet.apiKey || '';
-  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || fromApplet.projectId || '';
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim() || '';
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim() || '';
 
   if (!apiKey || !projectId || projectId === 'remixed-project-id') {
     return null;
@@ -41,19 +39,16 @@ function resolveFirebaseConfig(): FirebaseRuntimeConfig | null {
   return {
     apiKey,
     authDomain:
-      process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ||
-      fromApplet.authDomain ||
+      process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN?.trim() ||
       `${projectId}.firebaseapp.com`,
     projectId,
     storageBucket:
-      process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ||
-      fromApplet.storageBucket ||
+      process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET?.trim() ||
       `${projectId}.firebasestorage.app`,
-    messagingSenderId:
-      process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || fromApplet.messagingSenderId || '',
-    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || fromApplet.appId || '',
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID?.trim() || '',
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID?.trim() || '',
     firestoreDatabaseId:
-      process.env.NEXT_PUBLIC_FIREBASE_DATABASE_ID || fromApplet.firestoreDatabaseId || undefined,
+      process.env.NEXT_PUBLIC_FIREBASE_DATABASE_ID?.trim() || undefined,
   };
 }
 
