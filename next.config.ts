@@ -1,4 +1,10 @@
-import type {NextConfig} from 'next';
+import type { NextConfig } from 'next';
+
+const isGithubPages = process.env.GITHUB_PAGES === 'true';
+const rawBasePath = process.env.NEXT_PUBLIC_BASE_PATH || (isGithubPages ? '/ntw-relay' : '');
+const normalizedBasePath = rawBasePath
+  ? `/${rawBasePath.replace(/^\/+|\/+$/g, '')}`
+  : '';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -8,20 +14,30 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
-  // Allow access to remote image placeholder.
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'picsum.photos',
-        port: '',
-        pathname: '/**', // This allows any path under the hostname
-      },
-    ],
-  },
-  output: 'standalone',
+  ...(isGithubPages
+    ? {
+        output: 'export',
+        trailingSlash: true,
+        basePath: normalizedBasePath || undefined,
+        images: {
+          unoptimized: true,
+        },
+      }
+    : {
+        output: 'standalone',
+        images: {
+          remotePatterns: [
+            {
+              protocol: 'https',
+              hostname: 'picsum.photos',
+              port: '',
+              pathname: '/**',
+            },
+          ],
+        },
+      }),
   transpilePackages: ['motion'],
-  webpack: (config, {dev}) => {
+  webpack: (config, { dev }) => {
     // HMR is disabled in AI Studio via DISABLE_HMR env var.
     // Do not modify—file watching is disabled to prevent flickering during agent edits.
     if (dev && process.env.DISABLE_HMR === 'true') {

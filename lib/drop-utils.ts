@@ -282,3 +282,14 @@ export function getQrPayload(item: DropItem): {
       'This file is stored locally in Demo Mode. Sign in with Firebase Sync to generate a direct cross-device QR download link.',
   };
 }
+
+/**
+ * Builds the canonical shareable workspace URL, preserving any subpath deployment basePath
+ * (e.g. https://ntwkkm.github.io + /ntw-relay -> https://ntwkkm.github.io/ntw-relay/).
+ */
+export function buildAppShareUrl(origin: string, basePath: string = ''): string {
+  const cleanOrigin = origin.replace(/\/+$/, '');
+  const cleanBase = basePath.replace(/^\/+|\/+$/g, '');
+  if (!cleanOrigin) return '';
+  return cleanBase ? `${cleanOrigin}/${cleanBase}/` : cleanOrigin;
+}

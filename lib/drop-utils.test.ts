@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildAppShareUrl,
   filterDrops,
   formatBytes,
   formatRelativeTime,
@@ -181,4 +182,16 @@ test('material theme resolution defaults to Atelier Paper light and toggles clea
   assert.equal(resolveStoredTheme('dark'), 'dark');
   assert.equal(getNextTheme('light'), 'dark');
   assert.equal(getNextTheme('dark'), 'light');
+});
+
+test('buildAppShareUrl appends subpath basePath cleanly for GitHub Pages QR', () => {
+  assert.equal(buildAppShareUrl('http://localhost:3000', ''), 'http://localhost:3000');
+  assert.equal(
+    buildAppShareUrl('https://ntwkkm.github.io', '/ntw-relay'),
+    'https://ntwkkm.github.io/ntw-relay/'
+  );
+  assert.equal(
+    buildAppShareUrl('https://ntwkkm.github.io/', 'ntw-relay/'),
+    'https://ntwkkm.github.io/ntw-relay/'
+  );
 });

@@ -80,6 +80,7 @@ const CORS_JSON_SNIPPET = `[
   {
     "origin": [
       "http://localhost:3000",
+      "https://ntwkkm.github.io",
       "https://*.web.app",
       "https://*.firebaseapp.com",
       "https://*.run.app"

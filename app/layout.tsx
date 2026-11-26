@@ -17,7 +17,6 @@ const manrope = Manrope({
 
 const notoSansThai = Noto_Sans_Thai({
   subsets: ['thai'],
-  weight: ['400', '500', '600', '700'],
   variable: '--font-thai',
   display: 'swap',
 });

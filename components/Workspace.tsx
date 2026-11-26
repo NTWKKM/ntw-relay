@@ -49,6 +49,7 @@ import {
   subscribeLocalDemo,
 } from '@/lib/demo-store';
 import {
+  buildAppShareUrl,
   filterDrops,
   generateDropId,
   getOldDropIds,
@@ -376,7 +377,10 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
   }
 
   function handleOpenAppQr() {
-    const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const appUrl =
+      typeof window !== 'undefined'
+        ? buildAppShareUrl(window.location.origin, process.env.NEXT_PUBLIC_BASE_PATH || '')
+        : '';
     setQrModal({
       title: 'Connect Mobile',
       subtitle: 'Scan with your phone camera to open NTW Relay',
