@@ -3,15 +3,18 @@
 NTW Relay stores **everything in Cloud Firestore**: text drops, file metadata, and the file bytes
 themselves. No Cloud Storage bucket, Blaze plan, or CORS configuration is required.
 
-## 1. Environment Variables
+## 1. Environment Variables & Console Checklist
 Copy `.env.example` to `.env.local` only if you need to override `firebase-applet-config.json`
 (`NEXT_PUBLIC_FIREBASE_*`). Enable **Email/Password** and/or **Google** sign-in in Firebase Console.
 Writes require a verified email.
+- **Authorized domains**: Add `ntwkkm.github.io` (and any custom domain) under Firebase Console → Authentication → Settings → Authorized domains so Google Sign-In works on GitHub Pages.
+- **Web API key restrictions**: Restrict the Firebase browser API key in Google Cloud Console to allowed HTTP referrers (`localhost`, `127.0.0.1`, `ntwkkm.github.io`, `gen-lang-client-0817705965.firebaseapp.com`).
 
 ## 2. Deploy Firestore Security Rules
 ```bash
-npx firebase login
-npx firebase deploy --only firestore:rules
+npx -y firebase-tools@latest login
+npx -y firebase-tools@latest use gen-lang-client-0817705965
+npx -y firebase-tools@latest deploy --only firestore:rules
 ```
 `firebase.json` targets the named database configured in `firestore.database`.
 

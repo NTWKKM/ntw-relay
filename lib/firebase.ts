@@ -15,8 +15,6 @@ import {
 } from 'firebase/auth';
 import {
   getFirestore,
-  doc,
-  getDocFromServer,
   type Firestore,
 } from 'firebase/firestore';
 import appletConfig from '../firebase-applet-config.json';
@@ -126,23 +124,6 @@ export function handleFirestoreError(
   };
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
-}
-
-let connectionChecked = false;
-
-/**
- * Validates Firestore connectivity once on boot to surface misconfiguration early.
- */
-export async function testConnection(): Promise<void> {
-  if (!db || connectionChecked) return;
-  connectionChecked = true;
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error('Please check your Firebase configuration.');
-    }
-  }
 }
 
 export async function signInWithEmail(

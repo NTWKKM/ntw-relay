@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { auth, isFirebaseConfigured, testConnection } from '@/lib/firebase';
+import { auth, isFirebaseConfigured } from '@/lib/firebase';
 import { resolveAuthGuardDecision } from '@/lib/auth-guard';
 
 interface AuthContextValue {
@@ -39,7 +39,6 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
   useEffect(() => {
     if (!isFirebaseConfigured || !auth) return;
 
-    void testConnection();
     const unsub = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       setAuthReady(true);
