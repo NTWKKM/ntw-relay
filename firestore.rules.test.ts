@@ -22,6 +22,8 @@ interface MockAuth {
 const REQUEST_TIME = 1764100000000;
 const MAX_FILE_SIZE = 10485760;
 const MAX_CHUNK_BYTES = 786432;
+const MAX_STORAGE_BYTES = 10737418240;
+const MAX_STORAGE_DELTA = 11000000;
 const ALLOWED_KEYS = new Set([
   'ownerId',
   'type',
@@ -36,6 +38,7 @@ const ALLOWED_KEYS = new Set([
 ]);
 const REQUIRED_KEYS = ['ownerId', 'type', 'content', 'createdAt'];
 const CHUNK_KEYS = ['ownerId', 'index', 'data'];
+const STORAGE_STATS_KEYS = ['totalBytes', 'updatedAt'];
 
 function isValidId(id: unknown): boolean {
   return typeof id === 'string' && id.length >= 1 && id.length <= 128 && /^[a-zA-Z0-9_\-]+$/.test(id);
@@ -154,6 +157,59 @@ function canDeleteChunk(
   return Boolean(
     auth && auth.emailVerified === true && isValidId(dropId) && /^[0-9]{1,2}$/.test(chunkId) && existing.ownerId === auth.uid
   );
+}
+
+function isValidStorageStats(data: Record<string, unknown>): boolean {
+  const keys = Object.keys(data);
+  if (!STORAGE_STATS_KEYS.every((k) => keys.includes(k))) return false;
+  if (!keys.every((k) => STORAGE_STATS_KEYS.includes(k))) return false;
+  if (
+    typeof data.totalBytes !== 'number' ||
+    !Number.isInteger(data.totalBytes) ||
+    data.totalBytes < 0 ||
+    data.totalBytes > MAX_STORAGE_BYTES
+  ) {
+    return false;
+  }
+  if (typeof data.updatedAt !== 'number') return false;
+  return true;
+}
+
+function canGetStorageStats(auth: MockAuth | null): boolean {
+  return Boolean(auth);
+}
+
+function canListStorageStats(_auth: MockAuth | null): boolean {
+  return false;
+}
+
+function canCreateStorageStats(auth: MockAuth | null, incoming: Record<string, unknown>): boolean {
+  return Boolean(
+    auth &&
+      auth.emailVerified === true &&
+      isValidStorageStats(incoming) &&
+      (incoming.totalBytes as number) <= MAX_STORAGE_DELTA &&
+      incoming.updatedAt === REQUEST_TIME
+  );
+}
+
+function canUpdateStorageStats(
+  auth: MockAuth | null,
+  existing: Record<string, unknown>,
+  incoming: Record<string, unknown>
+): boolean {
+  if (!auth || auth.emailVerified !== true) return false;
+  if (!isValidStorageStats(incoming)) return false;
+  if (typeof existing.totalBytes !== 'number' || !Number.isInteger(existing.totalBytes)) return false;
+  const incBytes = incoming.totalBytes as number;
+  const extBytes = existing.totalBytes as number;
+  if (incBytes - extBytes > MAX_STORAGE_DELTA) return false;
+  if (extBytes - incBytes > MAX_STORAGE_DELTA) return false;
+  return incoming.updatedAt === REQUEST_TIME;
+}
+
+function canDeleteStorageStats(_auth: MockAuth | null): boolean {
+  return false;
 }
 
 const ownerAuth: MockAuth = { uid: 'user_alpha_1', emailVerified: true };
@@ -288,4 +344,137 @@ test('Chunk rules: legitimate owner create, get, list, and delete succeed', () =
   assert.equal(canGetChunk(ownerAuth, 'drop_1', '0', validChunk), true);
   assert.equal(canListChunk(ownerAuth, validChunk), true);
   assert.equal(canDeleteChunk(ownerAuth, 'drop_1', '0', validChunk), true);
+});
+
+test('Storage stats rules file enforces singleton path and structural guards', () => {
+  assert.match(rulesText, /match \/stats\/storage\s*\{/);
+  assert.doesNotMatch(rulesText, /match \/stats\/\{/);
+  assert.match(rulesText, /function isValidStorageStats\(data\)/);
+  assert.match(rulesText, /data\.keys\(\)\.hasAll\(\['totalBytes', 'updatedAt'\]\)/);
+  assert.match(rulesText, /data\.keys\(\)\.hasOnly\(\['totalBytes', 'updatedAt'\]\)/);
+  assert.match(rulesText, /data\.totalBytes <= 10737418240/);
+  assert.match(rulesText, /incoming\(\)\.totalBytes <= 11000000/);
+  assert.match(rulesText, /incoming\(\)\.totalBytes - existing\(\)\.totalBytes <= 11000000/);
+  assert.match(rulesText, /existing\(\)\.totalBytes - incoming\(\)\.totalBytes <= 11000000/);
+  assert.match(rulesText, /incoming\(\)\.updatedAt == request\.time/);
+});
+
+test('Storage stats rules: unauthenticated get, list, delete, unverified writes, invalid schema/bounds/deltas, and backdated timestamps are denied', () => {
+  const existingStats: Record<string, unknown> = {
+    totalBytes: 50000000,
+    updatedAt: REQUEST_TIME - 5000,
+  };
+
+  // Read / list / delete access
+  assert.equal(canGetStorageStats(null), false);
+  assert.equal(canListStorageStats(null), false);
+  assert.equal(canListStorageStats(ownerAuth), false);
+  assert.equal(canDeleteStorageStats(null), false);
+  assert.equal(canDeleteStorageStats(ownerAuth), false);
+
+  // Unauthenticated and unverified create/update
+  assert.equal(canCreateStorageStats(null, { totalBytes: 1024, updatedAt: REQUEST_TIME }), false);
+  assert.equal(canCreateStorageStats(unverifiedAuth, { totalBytes: 1024, updatedAt: REQUEST_TIME }), false);
+  assert.equal(canUpdateStorageStats(null, existingStats, { totalBytes: 50001024, updatedAt: REQUEST_TIME }), false);
+  assert.equal(
+    canUpdateStorageStats(unverifiedAuth, existingStats, { totalBytes: 50001024, updatedAt: REQUEST_TIME }),
+    false
+  );
+
+  // Extra/shadow fields and missing required fields
+  assert.equal(canCreateStorageStats(ownerAuth, { totalBytes: 1024, updatedAt: REQUEST_TIME, extra: 1 }), false);
+  assert.equal(
+    canUpdateStorageStats(ownerAuth, existingStats, { totalBytes: 50001024, updatedAt: REQUEST_TIME, quota: 999 }),
+    false
+  );
+  assert.equal(canCreateStorageStats(ownerAuth, { totalBytes: 1024 }), false);
+  assert.equal(canUpdateStorageStats(ownerAuth, existingStats, { updatedAt: REQUEST_TIME }), false);
+
+  // Negative, non-integer, or >10 GiB totalBytes
+  assert.equal(canCreateStorageStats(ownerAuth, { totalBytes: -1, updatedAt: REQUEST_TIME }), false);
+  assert.equal(canCreateStorageStats(ownerAuth, { totalBytes: 1024.5, updatedAt: REQUEST_TIME }), false);
+  assert.equal(
+    canUpdateStorageStats(ownerAuth, { totalBytes: 100, updatedAt: REQUEST_TIME - 1000 }, { totalBytes: -10, updatedAt: REQUEST_TIME }),
+    false
+  );
+  assert.equal(
+    canUpdateStorageStats(
+      ownerAuth,
+      { totalBytes: MAX_STORAGE_BYTES, updatedAt: REQUEST_TIME - 1000 },
+      { totalBytes: MAX_STORAGE_BYTES + 1, updatedAt: REQUEST_TIME }
+    ),
+    false
+  );
+
+  // Initial create > 11000000 and update delta > 11000000 (increment or decrement)
+  assert.equal(canCreateStorageStats(ownerAuth, { totalBytes: MAX_STORAGE_DELTA + 1, updatedAt: REQUEST_TIME }), false);
+  assert.equal(
+    canUpdateStorageStats(ownerAuth, existingStats, {
+      totalBytes: (existingStats.totalBytes as number) + MAX_STORAGE_DELTA + 1,
+      updatedAt: REQUEST_TIME,
+    }),
+    false
+  );
+  assert.equal(
+    canUpdateStorageStats(ownerAuth, existingStats, {
+      totalBytes: (existingStats.totalBytes as number) - MAX_STORAGE_DELTA - 1,
+      updatedAt: REQUEST_TIME,
+    }),
+    false
+  );
+
+  // Backdated or future updatedAt
+  assert.equal(canCreateStorageStats(ownerAuth, { totalBytes: 1024, updatedAt: REQUEST_TIME - 1000 }), false);
+  assert.equal(canCreateStorageStats(ownerAuth, { totalBytes: 1024, updatedAt: REQUEST_TIME + 1000 }), false);
+  assert.equal(
+    canUpdateStorageStats(ownerAuth, existingStats, { totalBytes: 50001024, updatedAt: REQUEST_TIME - 1000 }),
+    false
+  );
+});
+
+test('Storage stats rules: signed-in get, legitimate verified create, and bounded increment/decrement updates succeed', () => {
+  const existingStats: Record<string, unknown> = {
+    totalBytes: 50000000,
+    updatedAt: REQUEST_TIME - 5000,
+  };
+
+  assert.equal(canGetStorageStats(ownerAuth), true);
+  assert.equal(canGetStorageStats(unverifiedAuth), true);
+  assert.equal(canGetStorageStats(attackerAuth), true);
+
+  // Verified create within single-drop ceiling
+  assert.equal(canCreateStorageStats(ownerAuth, { totalBytes: 0, updatedAt: REQUEST_TIME }), true);
+  assert.equal(canCreateStorageStats(ownerAuth, { totalBytes: MAX_STORAGE_DELTA, updatedAt: REQUEST_TIME }), true);
+
+  // Bounded increment and decrement updates (including exact boundary)
+  assert.equal(
+    canUpdateStorageStats(ownerAuth, existingStats, {
+      totalBytes: (existingStats.totalBytes as number) + MAX_STORAGE_DELTA,
+      updatedAt: REQUEST_TIME,
+    }),
+    true
+  );
+  assert.equal(
+    canUpdateStorageStats(attackerAuth, existingStats, {
+      totalBytes: (existingStats.totalBytes as number) - MAX_STORAGE_DELTA,
+      updatedAt: REQUEST_TIME,
+    }),
+    true
+  );
+  assert.equal(
+    canUpdateStorageStats(
+      ownerAuth,
+      { totalBytes: 1024, updatedAt: REQUEST_TIME - 1000 },
+      { totalBytes: 0, updatedAt: REQUEST_TIME }
+    ),
+    true
+  );
+  assert.equal(
+    canUpdateStorageStats(
+      ownerAuth,
+      { totalBytes: MAX_STORAGE_BYTES - 1024, updatedAt: REQUEST_TIME - 1000 },
+      { totalBytes: MAX_STORAGE_BYTES, updatedAt: REQUEST_TIME }
+    ),
+    true
+  );
 });

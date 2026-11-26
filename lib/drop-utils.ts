@@ -4,9 +4,56 @@ export const MAX_TEXT_LENGTH = 50000;
 export const MAX_FILENAME_LENGTH = 255;
 /** Firestore-only (Spark plan) file cap. Keep in sync with firestore.rules (fileSize / chunkCount). */
 export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+/** Firebase Spark plan Firestore storage quota (1 GiB across the project). */
+export const SPARK_STORAGE_QUOTA_BYTES = 1024 * 1024 * 1024; // 1 GiB
+/** Maximum single-operation delta accepted by /stats/storage in firestore.rules. */
+export const MAX_STORAGE_COUNTER_DELTA_BYTES = 11_000_000;
 /** Raw bytes per Firestore chunk document (Firestore hard limit is 1 MiB per document). */
 export const CHUNK_SIZE_BYTES = 768 * 1024; // 768 KiB
 export const MAX_CHUNK_COUNT = Math.ceil(MAX_FILE_SIZE_BYTES / CHUNK_SIZE_BYTES); // 14
+
+const utf8Encoder = new TextEncoder();
+
+/**
+ * Estimates the Firestore storage footprint of a single drop in bytes,
+ * clamped to the /stats/storage single-operation delta bound.
+ */
+export function estimateDropStorageBytes(input: {
+  content?: string;
+  fileSize?: number;
+  previewDataUrl?: string | null;
+}): number {
+  const fileBytes =
+    typeof input.fileSize === 'number' && Number.isFinite(input.fileSize) && input.fileSize > 0
+      ? Math.round(input.fileSize)
+      : 0;
+  const textBytes = input.content ? utf8Encoder.encode(input.content).byteLength : 0;
+  const previewBytes = input.previewDataUrl ? input.previewDataUrl.length : 0;
+  return Math.min(MAX_STORAGE_COUNTER_DELTA_BYTES, fileBytes + textBytes + previewBytes);
+}
+
+export interface StorageUsageSummary {
+  usedBytes: number;
+  quotaBytes: number;
+  percent: number;
+  level: 'normal' | 'warning' | 'critical';
+}
+
+/**
+ * Computes clamped percentage and severity level for the shared 1 GB storage meter.
+ */
+export function computeStorageUsage(
+  usedBytes: number,
+  quotaBytes: number = SPARK_STORAGE_QUOTA_BYTES
+): StorageUsageSummary {
+  const safeQuota = Number.isFinite(quotaBytes) && quotaBytes > 0 ? quotaBytes : SPARK_STORAGE_QUOTA_BYTES;
+  const safeUsed =
+    Number.isFinite(usedBytes) && usedBytes > 0 ? Math.round(usedBytes) : 0;
+  const percent = Math.min(100, (safeUsed / safeQuota) * 100);
+  const level: StorageUsageSummary['level'] =
+    percent >= 90 ? 'critical' : percent >= 75 ? 'warning' : 'normal';
+  return { usedBytes: safeUsed, quotaBytes: safeQuota, percent, level };
+}
 
 export interface ChunkRange {
   index: number;
@@ -281,8 +328,6 @@ export function getOldDropIds(
 
 /** Maximum UTF-8 byte length for QR text payloads (safe for QR Level M & multi-byte scripts like Thai). */
 export const QR_MAX_TEXT_BYTES = 1000;
-
-const utf8Encoder = new TextEncoder();
 
 /**
  * Truncates a string to at most `maxBytes` UTF-8 bytes on a Unicode code-point boundary.

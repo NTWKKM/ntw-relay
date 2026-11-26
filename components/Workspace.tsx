@@ -35,6 +35,7 @@ import {
 import {
   createCloudTextDrop,
   deleteCloudDrop,
+  subscribeToGlobalStorageBytes,
   subscribeToUserDrops,
   toggleCloudDropCodeMode,
   uploadCloudFileDrop,
@@ -48,12 +49,16 @@ import {
 } from '@/lib/demo-store';
 import {
   buildAppShareUrl,
+  computeStorageUsage,
+  estimateDropStorageBytes,
   filterDrops,
+  formatBytes,
   generateDropId,
   getOldDropIds,
   getQrPayload,
   looksLikeCode,
   sanitizeFileName,
+  SPARK_STORAGE_QUOTA_BYTES,
 } from '@/lib/drop-utils';
 import type { CleanupRange, DropItem, FilterTab, UploadTaskState } from '@/lib/types';
 
@@ -107,6 +112,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
     };
   }, []);
   const [loadingCloudFeed, setLoadingCloudFeed] = useState(isCloudSynced);
+  const [globalStorageBytes, setGlobalStorageBytes] = useState<number | null>(null);
   const [uploads, setUploads] = useState<UploadTaskState[]>([]);
   const [filterTab, setFilterTab] = useState<FilterTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -132,7 +138,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
   useEffect(() => {
     if (!authReady || !isCloudSynced || !firebaseUserUid) return;
 
-    const unsub = subscribeToUserDrops(
+    const unsubDrops = subscribeToUserDrops(
       firebaseUserUid,
       (nextCloudItems) => {
         setCloudItems(nextCloudItems);
@@ -143,7 +149,13 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
         setLoadingCloudFeed(false);
       }
     );
-    return () => unsub();
+    const unsubStorage = subscribeToGlobalStorageBytes((totalBytes) => {
+      setGlobalStorageBytes(totalBytes);
+    });
+    return () => {
+      unsubDrops();
+      unsubStorage();
+    };
   }, [authReady, isCloudSynced, firebaseUserUid]);
 
   const handleSendText = useCallback(
@@ -454,6 +466,19 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
 
   const olderThan24hCount = useMemo(() => getOldDropIds(items, '24h').length, [items]);
   const olderThan7dCount = useMemo(() => getOldDropIds(items, '7d').length, [items]);
+  const storageUsage = useMemo(() => {
+    const usedBytes = isCloudSynced
+      ? (globalStorageBytes ?? 0)
+      : items.reduce((sum, it) => sum + estimateDropStorageBytes(it), 0);
+    return computeStorageUsage(usedBytes, SPARK_STORAGE_QUOTA_BYTES);
+  }, [isCloudSynced, globalStorageBytes, items]);
+
+  const storageBarFillClass =
+    storageUsage.level === 'critical'
+      ? 'bg-[#DC2626] dark:bg-[#F87171]'
+      : storageUsage.level === 'warning'
+        ? 'bg-[#D97706] dark:bg-[#FBBF24]'
+        : 'bg-[#181715] dark:bg-[#F3EFE8]';
 
   return (
     <div className="min-h-screen bg-[#F5F2EB] text-[#181715] dark:bg-[#121110] dark:text-[#F3EFE8] flex flex-col">
@@ -716,7 +741,36 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
           <span className="text-[#D4CEC2] dark:text-[#3A3630] select-none" aria-hidden="true">
             ·
           </span>
-          <span className="font-mono text-[11px] shrink-0">Max 10 MB</span>
+          <span className="font-mono text-[11px] shrink-0">Max 10 MB/file</span>
+          <span className="text-[#D4CEC2] dark:text-[#3A3630] select-none" aria-hidden="true">
+            ·
+          </span>
+          <div
+            className="flex items-center gap-2 shrink-0"
+            title={
+              isCloudSynced
+                ? `Shared project storage across all accounts: ${formatBytes(storageUsage.usedBytes)} / 1 GB`
+                : `Local sandbox usage: ${formatBytes(storageUsage.usedBytes)} / 1 GB`
+            }
+          >
+            <div
+              role="meter"
+              aria-label={isCloudSynced ? 'Shared storage usage across all accounts' : 'Local storage usage'}
+              aria-valuemin={0}
+              aria-valuemax={storageUsage.quotaBytes}
+              aria-valuenow={storageUsage.usedBytes}
+              aria-valuetext={`${formatBytes(storageUsage.usedBytes)} of 1 GB`}
+              className="w-20 sm:w-24 h-1.5 rounded-full bg-[#E2DCD0] dark:bg-[#2C2925] overflow-hidden"
+            >
+              <div
+                className={`h-full rounded-full transition-[width] duration-300 ${storageBarFillClass}`}
+                style={{ width: `${storageUsage.usedBytes > 0 ? Math.max(2, storageUsage.percent) : 0}%` }}
+              />
+            </div>
+            <span className="font-mono text-[11px] tabular-nums whitespace-nowrap">
+              {formatBytes(storageUsage.usedBytes)} / 1 GB
+            </span>
+          </div>
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">

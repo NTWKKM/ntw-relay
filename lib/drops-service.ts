@@ -8,6 +8,7 @@ import {
   getDocs,
   onSnapshot,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   Timestamp,
@@ -18,10 +19,12 @@ import {
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import {
+  estimateDropStorageBytes,
   formatBytes,
   generateDropId,
   looksLikeCode,
   MAX_FILE_SIZE_BYTES,
+  MAX_STORAGE_COUNTER_DELTA_BYTES,
   MAX_TEXT_LENGTH,
   sanitizeFileName,
   splitIntoChunkRanges,
@@ -31,6 +34,9 @@ import type { DropItem } from './types';
 
 const DROPS_COLLECTION = 'drops';
 const CHUNKS_SUBCOLLECTION = 'chunks';
+const STATS_COLLECTION = 'stats';
+const STORAGE_STATS_DOC = 'storage';
+const MAX_STORED_TOTAL_BYTES = 10 * 1024 * 1024 * 1024; // 10 GiB hard ceiling matching firestore.rules
 
 const MAX_BLOB_CACHE_BYTES = 50 * 1024 * 1024; // 50 MB total LRU budget
 const MAX_BLOB_CACHE_ENTRIES = 20;
@@ -144,6 +150,73 @@ export function subscribeToUserDrops(
   );
 }
 
+/**
+ * Best-effort transactional update of the shared /stats/storage counter across all accounts.
+ * Clamps totalBytes >= 0 and delta within firestore.rules bounds; never fails the primary mutation.
+ */
+async function adjustGlobalStorageBytes(rawDeltaBytes: number): Promise<void> {
+  const firestore = db;
+  if (!firestore || !Number.isFinite(rawDeltaBytes)) return;
+  const delta = Math.max(
+    -MAX_STORAGE_COUNTER_DELTA_BYTES,
+    Math.min(MAX_STORAGE_COUNTER_DELTA_BYTES, Math.round(rawDeltaBytes))
+  );
+  if (delta === 0) return;
+
+  const statsRef = doc(firestore, STATS_COLLECTION, STORAGE_STATS_DOC);
+  try {
+    await runTransaction(firestore, async (tx) => {
+      const snap = await tx.get(statsRef);
+      if (!snap.exists()) {
+        tx.set(statsRef, {
+          totalBytes: Math.max(0, delta),
+          updatedAt: serverTimestamp(),
+        });
+        return;
+      }
+      const rawCurrent = snap.data().totalBytes;
+      const current =
+        typeof rawCurrent === 'number' && Number.isFinite(rawCurrent)
+          ? Math.max(0, Math.floor(rawCurrent))
+          : 0;
+      const next = Math.min(MAX_STORED_TOTAL_BYTES, Math.max(0, current + delta));
+      tx.update(statsRef, {
+        totalBytes: next,
+        updatedAt: serverTimestamp(),
+      });
+    });
+  } catch {
+    // Non-blocking: counter contention or un-deployed rules must not break uploads/deletes.
+  }
+}
+
+/**
+ * Subscribes to the shared /stats/storage document tracking aggregate bytes across all accounts.
+ */
+export function subscribeToGlobalStorageBytes(
+  onUpdate: (totalBytes: number) => void
+): Unsubscribe {
+  if (!db) {
+    return () => {};
+  }
+
+  const statsRef = doc(db, STATS_COLLECTION, STORAGE_STATS_DOC);
+  return onSnapshot(
+    statsRef,
+    (snap) => {
+      if (!snap.exists()) {
+        onUpdate(0);
+        return;
+      }
+      const raw = snap.data().totalBytes;
+      onUpdate(typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0);
+    },
+    () => {
+      // Quietly ignore if rules for /stats/storage are not yet deployed.
+    }
+  );
+}
+
 export async function createCloudTextDrop(userId: string, rawText: string): Promise<string> {
   if (!db) throw new Error('Firestore is not configured.');
   const content = rawText.trim().slice(0, MAX_TEXT_LENGTH);
@@ -158,6 +231,7 @@ export async function createCloudTextDrop(userId: string, rawText: string): Prom
       isCode: looksLikeCode(content),
       createdAt: serverTimestamp(),
     });
+    void adjustGlobalStorageBytes(estimateDropStorageBytes({ content }));
     return dropId;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
@@ -230,6 +304,13 @@ export async function uploadCloudFileDrop(
       createdAt: serverTimestamp(),
     });
     setBlobCacheEntry(dropId, Promise.resolve(file), file.size);
+    void adjustGlobalStorageBytes(
+      estimateDropStorageBytes({
+        content: safeName,
+        fileSize: file.size,
+        previewDataUrl,
+      })
+    );
     return dropId;
   } catch (error) {
     // Best-effort cleanup of chunks that were written before the failure
@@ -329,6 +410,7 @@ export async function deleteCloudDrop(item: DropItem): Promise<void> {
     batch.delete(doc(firestore, DROPS_COLLECTION, item.id));
     await batch.commit();
     deleteBlobCacheEntry(item.id);
+    void adjustGlobalStorageBytes(-estimateDropStorageBytes(item));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }

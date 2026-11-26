@@ -55,6 +55,11 @@ service cloud.firestore {
     //   - index: int (required, 0..13)
     //   - data: bytes (required, size 1..786432 [768 KiB])
     //
+    // Document: /stats/storage (singleton)
+    // Fields:
+    //   - totalBytes: int (required, 0..10737418240 [10 GiB], delta <= 11000000 per op)
+    //   - updatedAt: timestamp (required, == request.time on create and update)
+    //
     // ===============================================================
 
     // Pillar 2: Validation Blueprint (Firestore-only chunked storage)
@@ -104,6 +109,15 @@ service cloud.firestore {
         && data.data is bytes
         && data.data.size() >= 1
         && data.data.size() <= 786432;
+    }
+
+    function isValidStorageStats(data) {
+      return data.keys().hasAll(['totalBytes', 'updatedAt'])
+        && data.keys().hasOnly(['totalBytes', 'updatedAt'])
+        && data.totalBytes is int
+        && data.totalBytes >= 0
+        && data.totalBytes <= 10737418240
+        && data.updatedAt is timestamp;
     }
 
     // Personal Drop Collection: Private Single-Owner Drops
@@ -158,6 +172,27 @@ service cloud.firestore {
           && chunkId.matches('^[0-9]{1,2}$')
           && existing().ownerId == request.auth.uid;
       }
+    }
+
+    // Global Aggregate Storage Counter (Singleton)
+    match /stats/storage {
+      allow get: if isSignedIn();
+
+      allow list: if false;
+
+      allow create: if isVerified()
+        && isValidStorageStats(incoming())
+        && incoming().totalBytes <= 11000000
+        && incoming().updatedAt == request.time;
+
+      allow update: if isVerified()
+        && isValidStorageStats(incoming())
+        && existing().totalBytes is int
+        && incoming().totalBytes - existing().totalBytes <= 11000000
+        && existing().totalBytes - incoming().totalBytes <= 11000000
+        && incoming().updatedAt == request.time;
+
+      allow delete: if false;
     }
   }
 }
