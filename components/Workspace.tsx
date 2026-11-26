@@ -113,6 +113,9 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
   }, []);
   const [loadingCloudFeed, setLoadingCloudFeed] = useState(isCloudSynced);
   const [globalStorageBytes, setGlobalStorageBytes] = useState<number | null>(null);
+  const [globalStorageStatus, setGlobalStorageStatus] = useState<'loading' | 'ready' | 'unavailable'>(
+    isCloudSynced ? 'loading' : 'ready'
+  );
   const [uploads, setUploads] = useState<UploadTaskState[]>([]);
   const [filterTab, setFilterTab] = useState<FilterTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -149,9 +152,16 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
         setLoadingCloudFeed(false);
       }
     );
-    const unsubStorage = subscribeToGlobalStorageBytes((totalBytes) => {
-      setGlobalStorageBytes(totalBytes);
-    });
+    const unsubStorage = subscribeToGlobalStorageBytes(
+      (totalBytes) => {
+        setGlobalStorageBytes(totalBytes);
+        setGlobalStorageStatus('ready');
+      },
+      () => {
+        setGlobalStorageBytes(null);
+        setGlobalStorageStatus('unavailable');
+      }
+    );
     return () => {
       unsubDrops();
       unsubStorage();
@@ -466,6 +476,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
 
   const olderThan24hCount = useMemo(() => getOldDropIds(items, '24h').length, [items]);
   const olderThan7dCount = useMemo(() => getOldDropIds(items, '7d').length, [items]);
+  const storageReady = !isCloudSynced || (globalStorageStatus === 'ready' && globalStorageBytes !== null);
   const storageUsage = useMemo(() => {
     const usedBytes = isCloudSynced
       ? (globalStorageBytes ?? 0)
@@ -748,9 +759,13 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
           <div
             className="flex items-center gap-2 shrink-0"
             title={
-              isCloudSynced
-                ? `Shared project storage across all accounts: ${formatBytes(storageUsage.usedBytes)} / 1 GB`
-                : `Local sandbox usage: ${formatBytes(storageUsage.usedBytes)} / 1 GB`
+              !isCloudSynced
+                ? `Local sandbox usage: ${formatBytes(storageUsage.usedBytes)} / 1 GB`
+                : storageReady
+                  ? `Shared project storage across all accounts: ${formatBytes(storageUsage.usedBytes)} / 1 GB`
+                  : globalStorageStatus === 'unavailable'
+                    ? 'Shared project storage usage unavailable'
+                    : 'Loading shared project storage usage'
             }
           >
             <div
@@ -758,17 +773,25 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
               aria-label={isCloudSynced ? 'Shared storage usage across all accounts' : 'Local storage usage'}
               aria-valuemin={0}
               aria-valuemax={storageUsage.quotaBytes}
-              aria-valuenow={storageUsage.usedBytes}
-              aria-valuetext={`${formatBytes(storageUsage.usedBytes)} of 1 GB`}
+              aria-valuenow={storageReady ? storageUsage.usedBytes : undefined}
+              aria-valuetext={
+                storageReady
+                  ? `${formatBytes(storageUsage.usedBytes)} of 1 GB`
+                  : globalStorageStatus === 'unavailable'
+                    ? 'Storage usage unavailable'
+                    : 'Loading storage usage'
+              }
               className="w-20 sm:w-24 h-1.5 rounded-full bg-[#E2DCD0] dark:bg-[#2C2925] overflow-hidden"
             >
               <div
                 className={`h-full rounded-full transition-[width] duration-300 ${storageBarFillClass}`}
-                style={{ width: `${storageUsage.usedBytes > 0 ? Math.max(2, storageUsage.percent) : 0}%` }}
+                style={{
+                  width: `${storageReady && storageUsage.usedBytes > 0 ? Math.max(2, storageUsage.percent) : 0}%`,
+                }}
               />
             </div>
             <span className="font-mono text-[11px] tabular-nums whitespace-nowrap">
-              {formatBytes(storageUsage.usedBytes)} / 1 GB
+              {storageReady ? `${formatBytes(storageUsage.usedBytes)} / 1 GB` : '— / 1 GB'}
             </span>
           </div>
         </div>

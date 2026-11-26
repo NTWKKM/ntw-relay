@@ -57,7 +57,8 @@ service cloud.firestore {
     //
     // Document: /stats/storage (singleton)
     // Fields:
-    //   - totalBytes: int (required, 0..10737418240 [10 GiB], delta <= 11000000 per op)
+    //   - totalBytes: int (required, 0..10737418240 [10 GiB], exact dropStorageBytes delta clamped to 11000000 per op)
+    //   - lastDropId: string (required, 1..128 chars [a-zA-Z0-9_-], proves atomic drop create/delete)
     //   - updatedAt: timestamp (required, == request.time on create and update)
     //
     // ===============================================================
@@ -112,12 +113,43 @@ service cloud.firestore {
     }
 
     function isValidStorageStats(data) {
-      return data.keys().hasAll(['totalBytes', 'updatedAt'])
-        && data.keys().hasOnly(['totalBytes', 'updatedAt'])
+      return data.keys().hasAll(['totalBytes', 'lastDropId', 'updatedAt'])
+        && data.keys().hasOnly(['totalBytes', 'lastDropId', 'updatedAt'])
         && data.totalBytes is int
         && data.totalBytes >= 0
         && data.totalBytes <= 10737418240
+        && data.lastDropId is string
+        && isValidId(data.lastDropId)
         && data.updatedAt is timestamp;
+    }
+
+    function minInt(a, b) {
+      return a < b ? a : b;
+    }
+
+    function maxInt(a, b) {
+      return a > b ? a : b;
+    }
+
+    function dropStorageBytes(d) {
+      return minInt(
+        11000000,
+        ('fileSize' in d ? int(d.fileSize) : 0)
+          + d.content.toUtf8().size()
+          + ('previewDataUrl' in d ? d.previewDataUrl.size() : 0)
+      );
+    }
+
+    function isAtomicDropCreate(dropId) {
+      return !exists(/databases/$(database)/documents/drops/$(dropId))
+        && existsAfter(/databases/$(database)/documents/drops/$(dropId))
+        && getAfter(/databases/$(database)/documents/drops/$(dropId)).data.ownerId == request.auth.uid;
+    }
+
+    function isAtomicDropDelete(dropId) {
+      return exists(/databases/$(database)/documents/drops/$(dropId))
+        && !existsAfter(/databases/$(database)/documents/drops/$(dropId))
+        && get(/databases/$(database)/documents/drops/$(dropId)).data.ownerId == request.auth.uid;
     }
 
     // Personal Drop Collection: Private Single-Owner Drops
@@ -182,15 +214,30 @@ service cloud.firestore {
 
       allow create: if isVerified()
         && isValidStorageStats(incoming())
-        && incoming().totalBytes <= 11000000
-        && incoming().updatedAt == request.time;
+        && incoming().updatedAt == request.time
+        && isAtomicDropCreate(incoming().lastDropId)
+        && incoming().totalBytes == dropStorageBytes(getAfter(/databases/$(database)/documents/drops/$(incoming().lastDropId)).data);
 
       allow update: if isVerified()
         && isValidStorageStats(incoming())
         && existing().totalBytes is int
-        && incoming().totalBytes - existing().totalBytes <= 11000000
-        && existing().totalBytes - incoming().totalBytes <= 11000000
-        && incoming().updatedAt == request.time;
+        && incoming().updatedAt == request.time
+        && (
+          (
+            isAtomicDropCreate(incoming().lastDropId)
+            && incoming().totalBytes == minInt(
+              10737418240,
+              existing().totalBytes + dropStorageBytes(getAfter(/databases/$(database)/documents/drops/$(incoming().lastDropId)).data)
+            )
+          )
+          || (
+            isAtomicDropDelete(incoming().lastDropId)
+            && incoming().totalBytes == maxInt(
+              0,
+              existing().totalBytes - dropStorageBytes(get(/databases/$(database)/documents/drops/$(incoming().lastDropId)).data)
+            )
+          )
+        );
 
       allow delete: if false;
     }

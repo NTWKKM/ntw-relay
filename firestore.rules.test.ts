@@ -38,7 +38,12 @@ const ALLOWED_KEYS = new Set([
 ]);
 const REQUIRED_KEYS = ['ownerId', 'type', 'content', 'createdAt'];
 const CHUNK_KEYS = ['ownerId', 'index', 'data'];
-const STORAGE_STATS_KEYS = ['totalBytes', 'updatedAt'];
+const STORAGE_STATS_KEYS = ['totalBytes', 'lastDropId', 'updatedAt'];
+
+interface MockDropBatchState {
+  beforeDrops: Record<string, Record<string, unknown>>;
+  afterDrops: Record<string, Record<string, unknown>>;
+}
 
 function isValidId(id: unknown): boolean {
   return typeof id === 'string' && id.length >= 1 && id.length <= 128 && /^[a-zA-Z0-9_\-]+$/.test(id);
@@ -171,8 +176,32 @@ function isValidStorageStats(data: Record<string, unknown>): boolean {
   ) {
     return false;
   }
+  if (typeof data.lastDropId !== 'string' || !isValidId(data.lastDropId)) return false;
   if (typeof data.updatedAt !== 'number') return false;
   return true;
+}
+
+const utf8Encoder = new TextEncoder();
+
+function dropStorageBytes(d: Record<string, unknown>): number {
+  const fileBytes = 'fileSize' in d ? Math.trunc(d.fileSize as number) : 0;
+  const contentBytes = utf8Encoder.encode(d.content as string).byteLength;
+  const previewBytes = 'previewDataUrl' in d ? (d.previewDataUrl as string).length : 0;
+  return Math.min(MAX_STORAGE_DELTA, fileBytes + contentBytes + previewBytes);
+}
+
+function isAtomicDropCreate(auth: MockAuth | null, dropId: string, batch: MockDropBatchState): boolean {
+  if (!auth) return false;
+  const existedBefore = Object.prototype.hasOwnProperty.call(batch.beforeDrops, dropId);
+  const existsAfter = Object.prototype.hasOwnProperty.call(batch.afterDrops, dropId);
+  return !existedBefore && existsAfter && batch.afterDrops[dropId]?.ownerId === auth.uid;
+}
+
+function isAtomicDropDelete(auth: MockAuth | null, dropId: string, batch: MockDropBatchState): boolean {
+  if (!auth) return false;
+  const existedBefore = Object.prototype.hasOwnProperty.call(batch.beforeDrops, dropId);
+  const existsAfter = Object.prototype.hasOwnProperty.call(batch.afterDrops, dropId);
+  return existedBefore && !existsAfter && batch.beforeDrops[dropId]?.ownerId === auth.uid;
 }
 
 function canGetStorageStats(auth: MockAuth | null): boolean {
@@ -183,29 +212,40 @@ function canListStorageStats(_auth: MockAuth | null): boolean {
   return false;
 }
 
-function canCreateStorageStats(auth: MockAuth | null, incoming: Record<string, unknown>): boolean {
-  return Boolean(
-    auth &&
-      auth.emailVerified === true &&
-      isValidStorageStats(incoming) &&
-      (incoming.totalBytes as number) <= MAX_STORAGE_DELTA &&
-      incoming.updatedAt === REQUEST_TIME
-  );
+function canCreateStorageStats(
+  auth: MockAuth | null,
+  incoming: Record<string, unknown>,
+  batch: MockDropBatchState
+): boolean {
+  if (!auth || auth.emailVerified !== true) return false;
+  if (!isValidStorageStats(incoming)) return false;
+  if (incoming.updatedAt !== REQUEST_TIME) return false;
+  const dropId = incoming.lastDropId as string;
+  if (!isAtomicDropCreate(auth, dropId, batch)) return false;
+  const createdDrop = batch.afterDrops[dropId];
+  return incoming.totalBytes === dropStorageBytes(createdDrop);
 }
 
 function canUpdateStorageStats(
   auth: MockAuth | null,
   existing: Record<string, unknown>,
-  incoming: Record<string, unknown>
+  incoming: Record<string, unknown>,
+  batch: MockDropBatchState
 ): boolean {
   if (!auth || auth.emailVerified !== true) return false;
   if (!isValidStorageStats(incoming)) return false;
   if (typeof existing.totalBytes !== 'number' || !Number.isInteger(existing.totalBytes)) return false;
+  if (incoming.updatedAt !== REQUEST_TIME) return false;
   const incBytes = incoming.totalBytes as number;
   const extBytes = existing.totalBytes as number;
-  if (incBytes - extBytes > MAX_STORAGE_DELTA) return false;
-  if (extBytes - incBytes > MAX_STORAGE_DELTA) return false;
-  return incoming.updatedAt === REQUEST_TIME;
+  const dropId = incoming.lastDropId as string;
+  const validCreateTransition =
+    isAtomicDropCreate(auth, dropId, batch) &&
+    incBytes === Math.min(MAX_STORAGE_BYTES, extBytes + dropStorageBytes(batch.afterDrops[dropId]));
+  const validDeleteTransition =
+    isAtomicDropDelete(auth, dropId, batch) &&
+    incBytes === Math.max(0, extBytes - dropStorageBytes(batch.beforeDrops[dropId]));
+  return validCreateTransition || validDeleteTransition;
 }
 
 function canDeleteStorageStats(_auth: MockAuth | null): boolean {
@@ -350,19 +390,67 @@ test('Storage stats rules file enforces singleton path and structural guards', (
   assert.match(rulesText, /match \/stats\/storage\s*\{/);
   assert.doesNotMatch(rulesText, /match \/stats\/\{/);
   assert.match(rulesText, /function isValidStorageStats\(data\)/);
-  assert.match(rulesText, /data\.keys\(\)\.hasAll\(\['totalBytes', 'updatedAt'\]\)/);
-  assert.match(rulesText, /data\.keys\(\)\.hasOnly\(\['totalBytes', 'updatedAt'\]\)/);
+  assert.match(rulesText, /function minInt\(a, b\)/);
+  assert.match(rulesText, /function maxInt\(a, b\)/);
+  assert.match(rulesText, /function dropStorageBytes\(d\)/);
+  assert.match(rulesText, /d\.content\.toUtf8\(\)\.size\(\)/);
+  assert.match(rulesText, /data\.keys\(\)\.hasAll\(\['totalBytes', 'lastDropId', 'updatedAt'\]\)/);
+  assert.match(rulesText, /data\.keys\(\)\.hasOnly\(\['totalBytes', 'lastDropId', 'updatedAt'\]\)/);
   assert.match(rulesText, /data\.totalBytes <= 10737418240/);
-  assert.match(rulesText, /incoming\(\)\.totalBytes <= 11000000/);
-  assert.match(rulesText, /incoming\(\)\.totalBytes - existing\(\)\.totalBytes <= 11000000/);
-  assert.match(rulesText, /existing\(\)\.totalBytes - incoming\(\)\.totalBytes <= 11000000/);
+  assert.match(rulesText, /isValidId\(data\.lastDropId\)/);
+  assert.match(rulesText, /function isAtomicDropCreate\(dropId\)/);
+  assert.match(rulesText, /function isAtomicDropDelete\(dropId\)/);
+  assert.match(rulesText, /existsAfter\(\/databases\/\$\(database\)\/documents\/drops\/\$\(dropId\)\)/);
+  assert.match(rulesText, /getAfter\(\/databases\/\$\(database\)\/documents\/drops\/\$\(dropId\)\)\.data\.ownerId == request\.auth\.uid/);
+  assert.match(rulesText, /get\(\/databases\/\$\(database\)\/documents\/drops\/\$\(dropId\)\)\.data\.ownerId == request\.auth\.uid/);
+  assert.match(
+    rulesText,
+    /incoming\(\)\.totalBytes == dropStorageBytes\(getAfter\(\/databases\/\$\(database\)\/documents\/drops\/\$\(incoming\(\)\.lastDropId\)\)\.data\)/
+  );
+  assert.match(rulesText, /incoming\(\)\.totalBytes == minInt\(/);
+  assert.match(rulesText, /incoming\(\)\.totalBytes == maxInt\(/);
   assert.match(rulesText, /incoming\(\)\.updatedAt == request\.time/);
+  assert.match(rulesText, /isAtomicDropCreate\(incoming\(\)\.lastDropId\)/);
+  assert.match(rulesText, /isAtomicDropDelete\(incoming\(\)\.lastDropId\)/);
 });
 
-test('Storage stats rules: unauthenticated get, list, delete, unverified writes, invalid schema/bounds/deltas, and backdated timestamps are denied', () => {
+test('Storage stats rules: unauthenticated get, list, delete, unverified writes, invalid schema/bounds/deltas, inflated claims, missing/cross-owner drop proofs, and backdated timestamps are denied', () => {
   const existingStats: Record<string, unknown> = {
     totalBytes: 50000000,
+    lastDropId: 'drop_prev_1',
     updatedAt: REQUEST_TIME - 5000,
+  };
+  const ownerCreateBatch: MockDropBatchState = {
+    beforeDrops: {},
+    afterDrops: { drop_new_1: { ownerId: ownerAuth.uid, content: 'x'.repeat(1024) } },
+  };
+  const ownerDeleteBatch: MockDropBatchState = {
+    beforeDrops: { drop_del_1: { ownerId: ownerAuth.uid, content: 'x'.repeat(1000) } },
+    afterDrops: {},
+  };
+  const tinyCreateBatch: MockDropBatchState = {
+    beforeDrops: {},
+    afterDrops: { drop_tiny_1: { ownerId: ownerAuth.uid, content: 'a' } },
+  };
+  const tinyDeleteBatch: MockDropBatchState = {
+    beforeDrops: { drop_tiny_del_1: { ownerId: ownerAuth.uid, content: 'a' } },
+    afterDrops: {},
+  };
+  const emptyBatch: MockDropBatchState = {
+    beforeDrops: {},
+    afterDrops: {},
+  };
+  const alreadyExistedBatch: MockDropBatchState = {
+    beforeDrops: { drop_new_1: { ownerId: ownerAuth.uid, content: 'x'.repeat(1024) } },
+    afterDrops: { drop_new_1: { ownerId: ownerAuth.uid, content: 'x'.repeat(1024) } },
+  };
+  const crossOwnerCreateBatch: MockDropBatchState = {
+    beforeDrops: {},
+    afterDrops: { drop_other_1: { ownerId: attackerAuth.uid, content: 'x'.repeat(1024) } },
+  };
+  const crossOwnerDeleteBatch: MockDropBatchState = {
+    beforeDrops: { drop_other_2: { ownerId: attackerAuth.uid, content: 'x'.repeat(1000) } },
+    afterDrops: {},
   };
 
   // Read / list / delete access
@@ -373,107 +461,457 @@ test('Storage stats rules: unauthenticated get, list, delete, unverified writes,
   assert.equal(canDeleteStorageStats(ownerAuth), false);
 
   // Unauthenticated and unverified create/update
-  assert.equal(canCreateStorageStats(null, { totalBytes: 1024, updatedAt: REQUEST_TIME }), false);
-  assert.equal(canCreateStorageStats(unverifiedAuth, { totalBytes: 1024, updatedAt: REQUEST_TIME }), false);
-  assert.equal(canUpdateStorageStats(null, existingStats, { totalBytes: 50001024, updatedAt: REQUEST_TIME }), false);
   assert.equal(
-    canUpdateStorageStats(unverifiedAuth, existingStats, { totalBytes: 50001024, updatedAt: REQUEST_TIME }),
+    canCreateStorageStats(null, { totalBytes: 1024, lastDropId: 'drop_new_1', updatedAt: REQUEST_TIME }, ownerCreateBatch),
+    false
+  );
+  assert.equal(
+    canCreateStorageStats(
+      unverifiedAuth,
+      { totalBytes: 1024, lastDropId: 'drop_new_1', updatedAt: REQUEST_TIME },
+      ownerCreateBatch
+    ),
+    false
+  );
+  assert.equal(
+    canUpdateStorageStats(
+      null,
+      existingStats,
+      { totalBytes: 50001024, lastDropId: 'drop_new_1', updatedAt: REQUEST_TIME },
+      ownerCreateBatch
+    ),
+    false
+  );
+  assert.equal(
+    canUpdateStorageStats(
+      unverifiedAuth,
+      existingStats,
+      { totalBytes: 50001024, lastDropId: 'drop_new_1', updatedAt: REQUEST_TIME },
+      ownerCreateBatch
+    ),
     false
   );
 
-  // Extra/shadow fields and missing required fields
-  assert.equal(canCreateStorageStats(ownerAuth, { totalBytes: 1024, updatedAt: REQUEST_TIME, extra: 1 }), false);
+  // Missing atomic drop proof (standalone counter writes or non-transitioning drops)
   assert.equal(
-    canUpdateStorageStats(ownerAuth, existingStats, { totalBytes: 50001024, updatedAt: REQUEST_TIME, quota: 999 }),
+    canCreateStorageStats(ownerAuth, { totalBytes: 1024, lastDropId: 'drop_new_1', updatedAt: REQUEST_TIME }, emptyBatch),
     false
   );
-  assert.equal(canCreateStorageStats(ownerAuth, { totalBytes: 1024 }), false);
-  assert.equal(canUpdateStorageStats(ownerAuth, existingStats, { updatedAt: REQUEST_TIME }), false);
-
-  // Negative, non-integer, or >10 GiB totalBytes
-  assert.equal(canCreateStorageStats(ownerAuth, { totalBytes: -1, updatedAt: REQUEST_TIME }), false);
-  assert.equal(canCreateStorageStats(ownerAuth, { totalBytes: 1024.5, updatedAt: REQUEST_TIME }), false);
   assert.equal(
-    canUpdateStorageStats(ownerAuth, { totalBytes: 100, updatedAt: REQUEST_TIME - 1000 }, { totalBytes: -10, updatedAt: REQUEST_TIME }),
+    canCreateStorageStats(
+      ownerAuth,
+      { totalBytes: 1024, lastDropId: 'drop_new_1', updatedAt: REQUEST_TIME },
+      alreadyExistedBatch
+    ),
     false
   );
   assert.equal(
     canUpdateStorageStats(
       ownerAuth,
-      { totalBytes: MAX_STORAGE_BYTES, updatedAt: REQUEST_TIME - 1000 },
-      { totalBytes: MAX_STORAGE_BYTES + 1, updatedAt: REQUEST_TIME }
+      existingStats,
+      { totalBytes: 50001024, lastDropId: 'drop_new_1', updatedAt: REQUEST_TIME },
+      emptyBatch
+    ),
+    false
+  );
+  assert.equal(
+    canUpdateStorageStats(
+      ownerAuth,
+      existingStats,
+      { totalBytes: 49999000, lastDropId: 'drop_del_1', updatedAt: REQUEST_TIME },
+      emptyBatch
+    ),
+    false
+  );
+  assert.equal(
+    canUpdateStorageStats(
+      ownerAuth,
+      existingStats,
+      { totalBytes: 50001024, lastDropId: 'drop_new_1', updatedAt: REQUEST_TIME },
+      alreadyExistedBatch
+    ),
+    false
+  );
+  // Mismatched direction: increment using delete proof, decrement using create proof
+  assert.equal(
+    canUpdateStorageStats(
+      ownerAuth,
+      existingStats,
+      { totalBytes: 50001024, lastDropId: 'drop_del_1', updatedAt: REQUEST_TIME },
+      ownerDeleteBatch
+    ),
+    false
+  );
+  assert.equal(
+    canUpdateStorageStats(
+      ownerAuth,
+      existingStats,
+      { totalBytes: 49999000, lastDropId: 'drop_new_1', updatedAt: REQUEST_TIME },
+      ownerCreateBatch
+    ),
+    false
+  );
+
+  // Cross-owner drop proof is denied
+  assert.equal(
+    canCreateStorageStats(
+      ownerAuth,
+      { totalBytes: 1024, lastDropId: 'drop_other_1', updatedAt: REQUEST_TIME },
+      crossOwnerCreateBatch
+    ),
+    false
+  );
+  assert.equal(
+    canUpdateStorageStats(
+      ownerAuth,
+      existingStats,
+      { totalBytes: 50001024, lastDropId: 'drop_other_1', updatedAt: REQUEST_TIME },
+      crossOwnerCreateBatch
+    ),
+    false
+  );
+  assert.equal(
+    canUpdateStorageStats(
+      ownerAuth,
+      existingStats,
+      { totalBytes: 49999000, lastDropId: 'drop_other_2', updatedAt: REQUEST_TIME },
+      crossOwnerDeleteBatch
+    ),
+    false
+  );
+
+  // Invalid lastDropId (missing, empty, path traversal, >128 chars, wrong type)
+  assert.equal(canCreateStorageStats(ownerAuth, { totalBytes: 1024, updatedAt: REQUEST_TIME }, ownerCreateBatch), false);
+  assert.equal(
+    canCreateStorageStats(ownerAuth, { totalBytes: 1024, lastDropId: '', updatedAt: REQUEST_TIME }, ownerCreateBatch),
+    false
+  );
+  assert.equal(
+    canCreateStorageStats(
+      ownerAuth,
+      { totalBytes: 1024, lastDropId: '../evil$id', updatedAt: REQUEST_TIME },
+      { beforeDrops: {}, afterDrops: { '../evil$id': { ownerId: ownerAuth.uid } } }
+    ),
+    false
+  );
+  assert.equal(
+    canCreateStorageStats(
+      ownerAuth,
+      { totalBytes: 1024, lastDropId: 'a'.repeat(129), updatedAt: REQUEST_TIME },
+      { beforeDrops: {}, afterDrops: { ['a'.repeat(129)]: { ownerId: ownerAuth.uid } } }
+    ),
+    false
+  );
+  assert.equal(
+    canUpdateStorageStats(
+      ownerAuth,
+      existingStats,
+      { totalBytes: 50001024, lastDropId: 12345, updatedAt: REQUEST_TIME },
+      ownerCreateBatch
+    ),
+    false
+  );
+
+  // Extra/shadow fields and missing required fields
+  assert.equal(
+    canCreateStorageStats(
+      ownerAuth,
+      { totalBytes: 1024, lastDropId: 'drop_new_1', updatedAt: REQUEST_TIME, extra: 1 },
+      ownerCreateBatch
+    ),
+    false
+  );
+  assert.equal(
+    canUpdateStorageStats(
+      ownerAuth,
+      existingStats,
+      { totalBytes: 50001024, lastDropId: 'drop_new_1', updatedAt: REQUEST_TIME, quota: 999 },
+      ownerCreateBatch
+    ),
+    false
+  );
+  assert.equal(
+    canCreateStorageStats(ownerAuth, { totalBytes: 1024, lastDropId: 'drop_new_1' }, ownerCreateBatch),
+    false
+  );
+  assert.equal(
+    canUpdateStorageStats(ownerAuth, existingStats, { lastDropId: 'drop_new_1', updatedAt: REQUEST_TIME }, ownerCreateBatch),
+    false
+  );
+
+  // Negative, non-integer, or >10 GiB totalBytes
+  assert.equal(
+    canCreateStorageStats(ownerAuth, { totalBytes: -1, lastDropId: 'drop_new_1', updatedAt: REQUEST_TIME }, ownerCreateBatch),
+    false
+  );
+  assert.equal(
+    canCreateStorageStats(ownerAuth, { totalBytes: 1024.5, lastDropId: 'drop_new_1', updatedAt: REQUEST_TIME }, ownerCreateBatch),
+    false
+  );
+  assert.equal(
+    canUpdateStorageStats(
+      ownerAuth,
+      { totalBytes: 100, lastDropId: 'drop_prev_1', updatedAt: REQUEST_TIME - 1000 },
+      { totalBytes: -10, lastDropId: 'drop_del_1', updatedAt: REQUEST_TIME },
+      ownerDeleteBatch
+    ),
+    false
+  );
+  assert.equal(
+    canUpdateStorageStats(
+      ownerAuth,
+      { totalBytes: MAX_STORAGE_BYTES, lastDropId: 'drop_prev_1', updatedAt: REQUEST_TIME - 1000 },
+      { totalBytes: MAX_STORAGE_BYTES + 1, lastDropId: 'drop_new_1', updatedAt: REQUEST_TIME },
+      ownerCreateBatch
     ),
     false
   );
 
   // Initial create > 11000000 and update delta > 11000000 (increment or decrement)
-  assert.equal(canCreateStorageStats(ownerAuth, { totalBytes: MAX_STORAGE_DELTA + 1, updatedAt: REQUEST_TIME }), false);
   assert.equal(
-    canUpdateStorageStats(ownerAuth, existingStats, {
-      totalBytes: (existingStats.totalBytes as number) + MAX_STORAGE_DELTA + 1,
-      updatedAt: REQUEST_TIME,
-    }),
+    canCreateStorageStats(
+      ownerAuth,
+      { totalBytes: MAX_STORAGE_DELTA + 1, lastDropId: 'drop_new_1', updatedAt: REQUEST_TIME },
+      ownerCreateBatch
+    ),
     false
   );
   assert.equal(
-    canUpdateStorageStats(ownerAuth, existingStats, {
-      totalBytes: (existingStats.totalBytes as number) - MAX_STORAGE_DELTA - 1,
-      updatedAt: REQUEST_TIME,
-    }),
+    canUpdateStorageStats(
+      ownerAuth,
+      existingStats,
+      {
+        totalBytes: (existingStats.totalBytes as number) + MAX_STORAGE_DELTA + 1,
+        lastDropId: 'drop_new_1',
+        updatedAt: REQUEST_TIME,
+      },
+      ownerCreateBatch
+    ),
+    false
+  );
+  assert.equal(
+    canUpdateStorageStats(
+      ownerAuth,
+      existingStats,
+      {
+        totalBytes: (existingStats.totalBytes as number) - MAX_STORAGE_DELTA - 1,
+        lastDropId: 'drop_del_1',
+        updatedAt: REQUEST_TIME,
+      },
+      ownerDeleteBatch
+    ),
+    false
+  );
+
+  // Inflated create/increment/decrement: 1-byte drop claiming ±11,000,000 or mismatched bytes
+  assert.equal(
+    canCreateStorageStats(
+      ownerAuth,
+      { totalBytes: MAX_STORAGE_DELTA, lastDropId: 'drop_tiny_1', updatedAt: REQUEST_TIME },
+      tinyCreateBatch
+    ),
+    false
+  );
+  assert.equal(
+    canCreateStorageStats(
+      ownerAuth,
+      { totalBytes: 2, lastDropId: 'drop_tiny_1', updatedAt: REQUEST_TIME },
+      tinyCreateBatch
+    ),
+    false
+  );
+  assert.equal(
+    canUpdateStorageStats(
+      ownerAuth,
+      existingStats,
+      {
+        totalBytes: (existingStats.totalBytes as number) + MAX_STORAGE_DELTA,
+        lastDropId: 'drop_tiny_1',
+        updatedAt: REQUEST_TIME,
+      },
+      tinyCreateBatch
+    ),
+    false
+  );
+  assert.equal(
+    canUpdateStorageStats(
+      ownerAuth,
+      existingStats,
+      {
+        totalBytes: (existingStats.totalBytes as number) - MAX_STORAGE_DELTA,
+        lastDropId: 'drop_tiny_del_1',
+        updatedAt: REQUEST_TIME,
+      },
+      tinyDeleteBatch
+    ),
+    false
+  );
+  // Multi-byte UTF-8 mismatch: 'กข' is 6 UTF-8 bytes, claiming JS .length (2) must fail
+  assert.equal(
+    canCreateStorageStats(
+      ownerAuth,
+      { totalBytes: 2, lastDropId: 'drop_thai_1', updatedAt: REQUEST_TIME },
+      { beforeDrops: {}, afterDrops: { drop_thai_1: { ownerId: ownerAuth.uid, content: 'กข' } } }
+    ),
     false
   );
 
   // Backdated or future updatedAt
-  assert.equal(canCreateStorageStats(ownerAuth, { totalBytes: 1024, updatedAt: REQUEST_TIME - 1000 }), false);
-  assert.equal(canCreateStorageStats(ownerAuth, { totalBytes: 1024, updatedAt: REQUEST_TIME + 1000 }), false);
   assert.equal(
-    canUpdateStorageStats(ownerAuth, existingStats, { totalBytes: 50001024, updatedAt: REQUEST_TIME - 1000 }),
+    canCreateStorageStats(
+      ownerAuth,
+      { totalBytes: 1024, lastDropId: 'drop_new_1', updatedAt: REQUEST_TIME - 1000 },
+      ownerCreateBatch
+    ),
+    false
+  );
+  assert.equal(
+    canCreateStorageStats(
+      ownerAuth,
+      { totalBytes: 1024, lastDropId: 'drop_new_1', updatedAt: REQUEST_TIME + 1000 },
+      ownerCreateBatch
+    ),
+    false
+  );
+  assert.equal(
+    canUpdateStorageStats(
+      ownerAuth,
+      existingStats,
+      { totalBytes: 50001024, lastDropId: 'drop_new_1', updatedAt: REQUEST_TIME - 1000 },
+      ownerCreateBatch
+    ),
     false
   );
 });
 
-test('Storage stats rules: signed-in get, legitimate verified create, and bounded increment/decrement updates succeed', () => {
+test('Storage stats rules: signed-in get, exact atomic drop create, and exact atomic drop delete (including UTF-8, 10 GiB ceiling, and 0-byte floor clamps) succeed', () => {
   const existingStats: Record<string, unknown> = {
     totalBytes: 50000000,
+    lastDropId: 'drop_prev_1',
     updatedAt: REQUEST_TIME - 5000,
+  };
+  const emptyDropCreateBatch: MockDropBatchState = {
+    beforeDrops: {},
+    afterDrops: { drop_empty_1: { ownerId: ownerAuth.uid, content: '' } },
+  };
+  const utf8FileCreateBatch: MockDropBatchState = {
+    beforeDrops: {},
+    afterDrops: {
+      drop_utf8_1: {
+        ownerId: ownerAuth.uid,
+        content: 'กข', // 6 UTF-8 bytes
+        fileSize: 1024,
+        previewDataUrl: 'data:image/jpeg;base64,AAAA', // 27 chars
+      },
+    },
+  };
+  const maxClampedCreateBatch: MockDropBatchState = {
+    beforeDrops: {},
+    afterDrops: {
+      drop_max_1: {
+        ownerId: ownerAuth.uid,
+        content: 'x'.repeat(50000),
+        fileSize: 10950000,
+        previewDataUrl: 'data:image/jpeg;base64,AAAA',
+      },
+    },
+  };
+  const ownerDeleteBatch: MockDropBatchState = {
+    beforeDrops: { drop_del_1: { ownerId: ownerAuth.uid, content: 'x'.repeat(4096) } },
+    afterDrops: {},
+  };
+  const attackerDeleteBatch: MockDropBatchState = {
+    beforeDrops: {
+      drop_beta_del_1: {
+        ownerId: attackerAuth.uid,
+        content: 'กข', // 6 UTF-8 bytes
+        fileSize: 2048,
+      },
+    },
+    afterDrops: {},
   };
 
   assert.equal(canGetStorageStats(ownerAuth), true);
   assert.equal(canGetStorageStats(unverifiedAuth), true);
   assert.equal(canGetStorageStats(attackerAuth), true);
 
-  // Verified create within single-drop ceiling
-  assert.equal(canCreateStorageStats(ownerAuth, { totalBytes: 0, updatedAt: REQUEST_TIME }), true);
-  assert.equal(canCreateStorageStats(ownerAuth, { totalBytes: MAX_STORAGE_DELTA, updatedAt: REQUEST_TIME }), true);
-
-  // Bounded increment and decrement updates (including exact boundary)
+  // Exact matching create: empty drop (0 bytes), UTF-8 + fileSize + previewDataUrl, and 11 MB clamp
   assert.equal(
-    canUpdateStorageStats(ownerAuth, existingStats, {
-      totalBytes: (existingStats.totalBytes as number) + MAX_STORAGE_DELTA,
-      updatedAt: REQUEST_TIME,
-    }),
+    canCreateStorageStats(ownerAuth, { totalBytes: 0, lastDropId: 'drop_empty_1', updatedAt: REQUEST_TIME }, emptyDropCreateBatch),
     true
   );
   assert.equal(
-    canUpdateStorageStats(attackerAuth, existingStats, {
-      totalBytes: (existingStats.totalBytes as number) - MAX_STORAGE_DELTA,
-      updatedAt: REQUEST_TIME,
-    }),
+    canCreateStorageStats(
+      ownerAuth,
+      { totalBytes: 6 + 1024 + 27, lastDropId: 'drop_utf8_1', updatedAt: REQUEST_TIME },
+      utf8FileCreateBatch
+    ),
+    true
+  );
+  assert.equal(
+    canCreateStorageStats(
+      ownerAuth,
+      { totalBytes: MAX_STORAGE_DELTA, lastDropId: 'drop_max_1', updatedAt: REQUEST_TIME },
+      maxClampedCreateBatch
+    ),
+    true
+  );
+
+  // Exact matching atomic create increment and atomic delete decrement
+  assert.equal(
+    canUpdateStorageStats(
+      ownerAuth,
+      existingStats,
+      {
+        totalBytes: (existingStats.totalBytes as number) + 6 + 1024 + 27,
+        lastDropId: 'drop_utf8_1',
+        updatedAt: REQUEST_TIME,
+      },
+      utf8FileCreateBatch
+    ),
     true
   );
   assert.equal(
     canUpdateStorageStats(
+      attackerAuth,
+      existingStats,
+      {
+        totalBytes: (existingStats.totalBytes as number) - (6 + 2048),
+        lastDropId: 'drop_beta_del_1',
+        updatedAt: REQUEST_TIME,
+      },
+      attackerDeleteBatch
+    ),
+    true
+  );
+
+  // 0-byte floor clamp on delete (existing < deletedDropBytes -> 0, and 0 -> 0)
+  assert.equal(
+    canUpdateStorageStats(
       ownerAuth,
-      { totalBytes: 1024, updatedAt: REQUEST_TIME - 1000 },
-      { totalBytes: 0, updatedAt: REQUEST_TIME }
+      { totalBytes: 1024, lastDropId: 'drop_prev_1', updatedAt: REQUEST_TIME - 1000 },
+      { totalBytes: 0, lastDropId: 'drop_del_1', updatedAt: REQUEST_TIME },
+      ownerDeleteBatch
     ),
     true
   );
   assert.equal(
     canUpdateStorageStats(
       ownerAuth,
-      { totalBytes: MAX_STORAGE_BYTES - 1024, updatedAt: REQUEST_TIME - 1000 },
-      { totalBytes: MAX_STORAGE_BYTES, updatedAt: REQUEST_TIME }
+      { totalBytes: 0, lastDropId: 'drop_prev_1', updatedAt: REQUEST_TIME - 1000 },
+      { totalBytes: 0, lastDropId: 'drop_del_1', updatedAt: REQUEST_TIME },
+      ownerDeleteBatch
+    ),
+    true
+  );
+
+  // 10 GiB ceiling clamp on create increment (existing + dropBytes > 10 GiB -> 10 GiB)
+  assert.equal(
+    canUpdateStorageStats(
+      ownerAuth,
+      { totalBytes: MAX_STORAGE_BYTES - 500, lastDropId: 'drop_prev_1', updatedAt: REQUEST_TIME - 1000 },
+      { totalBytes: MAX_STORAGE_BYTES, lastDropId: 'drop_utf8_1', updatedAt: REQUEST_TIME },
+      utf8FileCreateBatch
     ),
     true
   );
