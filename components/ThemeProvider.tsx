@@ -34,8 +34,12 @@ function notifyThemeListeners() {
 function subscribeTheme(onStoreChange: () => void) {
   themeListeners.add(onStoreChange);
   const onStorage = (e: StorageEvent) => {
-    if (e.key === THEME_STORAGE_KEY) {
-      memoryTheme = resolveStoredTheme(e.newValue);
+    if (e.key === THEME_STORAGE_KEY || e.key === null) {
+      try {
+        memoryTheme = resolveStoredTheme(window.localStorage.getItem(THEME_STORAGE_KEY));
+      } catch {
+        // Preserve memoryTheme fallback when storage access fails
+      }
       onStoreChange();
     }
   };

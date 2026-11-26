@@ -371,7 +371,7 @@ export function getQrPayload(
  */
 export function buildAppShareUrl(origin: string, basePath: string = ''): string {
   const cleanOrigin = origin.replace(/\/+$/, '');
-  const cleanBase = basePath.replace(/^\/+|\/+$/g, '');
+  const cleanBase = basePath.trim().replace(/^\/+|\/+$/g, '');
   if (!cleanOrigin) return '';
   return cleanBase ? `${cleanOrigin}/${cleanBase}/` : cleanOrigin;
 }

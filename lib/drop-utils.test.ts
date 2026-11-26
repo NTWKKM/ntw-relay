@@ -195,12 +195,14 @@ test('material theme resolution defaults to Atelier Paper light and toggles clea
 
 test('buildAppShareUrl appends subpath basePath cleanly for GitHub Pages QR', () => {
   assert.equal(buildAppShareUrl('http://localhost:3000', ''), 'http://localhost:3000');
+  assert.equal(buildAppShareUrl('http://localhost:3000', '   '), 'http://localhost:3000');
+  assert.equal(buildAppShareUrl('http://localhost:3000', ' / '), 'http://localhost:3000');
   assert.equal(
     buildAppShareUrl('https://ntwkkm.github.io', '/ntw-relay'),
     'https://ntwkkm.github.io/ntw-relay/'
   );
   assert.equal(
-    buildAppShareUrl('https://ntwkkm.github.io/', 'ntw-relay/'),
+    buildAppShareUrl('https://ntwkkm.github.io/', ' ntw-relay/ '),
     'https://ntwkkm.github.io/ntw-relay/'
   );
 });
