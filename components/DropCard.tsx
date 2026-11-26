@@ -13,7 +13,6 @@ import {
   FileImage,
   FileSpreadsheet,
   FileText,
-  Maximize2,
   QrCode,
   Trash2,
 } from 'lucide-react';
@@ -24,6 +23,7 @@ import {
 } from '@/lib/clipboard-actions';
 import {
   formatBytes,
+  formatFileTypeLabel,
   formatRelativeTime,
   hasFileData,
   looksLikeCode,
@@ -43,19 +43,19 @@ function FileTypeIcon({ fileName, mimeType }: { fileName?: string; mimeType?: st
   const lower = (fileName || '').toLowerCase();
   const mime = (mimeType || '').toLowerCase();
   if (mime.includes('zip') || mime.includes('tar') || /\.(zip|rar|7z|tar|gz)$/.test(lower)) {
-    return <FileArchive className="w-5 h-5" aria-hidden="true" />;
+    return <FileArchive className="w-4 h-4" aria-hidden="true" />;
   }
   if (mime.includes('spreadsheet') || /\.(csv|xlsx|xls)$/.test(lower)) {
-    return <FileSpreadsheet className="w-5 h-5" aria-hidden="true" />;
+    return <FileSpreadsheet className="w-4 h-4" aria-hidden="true" />;
   }
   if (
     mime.includes('json') ||
     mime.includes('javascript') ||
     /\.(ts|tsx|js|jsx|py|json|yml|yaml|sql|sh|html|css|md)$/.test(lower)
   ) {
-    return <FileCode className="w-5 h-5" aria-hidden="true" />;
+    return <FileCode className="w-4 h-4" aria-hidden="true" />;
   }
-  return <FileText className="w-5 h-5" aria-hidden="true" />;
+  return <FileText className="w-4 h-4" aria-hidden="true" />;
 }
 
 export function DropCard({
@@ -72,15 +72,15 @@ export function DropCard({
 
   const isCode = item.isCode ?? looksLikeCode(item.content);
   const itemDescriptor = item.fileName || item.content.slice(0, 32) || item.id;
-  const lineCount = item.type === 'text' ? item.content.split('\n').length : 0;
   const canDownload = hasFileData(item);
   const imageSrc = item.downloadUrl ?? item.previewDataUrl;
+  const fileExt = item.type === 'file' ? formatFileTypeLabel(item.fileName, item.mimeType) : null;
 
   async function handleCopyText() {
     const ok = await copyTextToClipboard(item.content);
     if (ok) {
       setCopiedLabel('Copied');
-      setTimeout(() => setCopiedLabel(null), 1800);
+      setTimeout(() => setCopiedLabel(null), 1600);
     }
   }
 
@@ -88,18 +88,18 @@ export function DropCard({
     if (!canDownload) return;
     const result = await copyImageToClipboard(item);
     setCopiedLabel(result.message);
-    setTimeout(() => setCopiedLabel(null), 2000);
+    setTimeout(() => setCopiedLabel(null), 1800);
   }
 
   async function handleDownload() {
     if (!canDownload || downloadLabel) return;
-    setDownloadLabel('Loading…');
+    setDownloadLabel('…');
     try {
       await downloadDropFile(item);
       setDownloadLabel(null);
     } catch {
       setDownloadLabel('Failed');
-      setTimeout(() => setDownloadLabel(null), 2400);
+      setTimeout(() => setDownloadLabel(null), 2200);
     }
   }
 
@@ -115,25 +115,19 @@ export function DropCard({
   return (
     <motion.article
       layout="position"
-      initial={{ opacity: 0, y: 6 }}
+      initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+      transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
       data-testid="drop-card"
       data-drop-type={item.type}
-      className="group rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] hover:border-[#CBC3B4] dark:hover:border-[#3F3A34] transition-colors p-5 sm:p-6 space-y-4"
+      className="group rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] hover:border-[#CBC3B4] dark:hover:border-[#3F3A34] transition-colors px-4 sm:px-5 py-4 space-y-3"
     >
-      {/* Top Unboxed Metadata + Calm Action Cluster */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-xs text-[#6B655C] dark:text-[#968F84] tabular-nums min-w-0">
-          <span className="font-semibold text-[#181715] dark:text-[#F3EFE8] capitalize">
-            {item.type === 'text' && isCode ? 'Code' : item.type}
+      {/* Whisper-quiet metadata + minimal action cluster */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-xs text-[#787268] dark:text-[#8A8378] tabular-nums min-w-0 whitespace-nowrap">
+          <span className="font-medium text-[#3D3A35] dark:text-[#CFC8BC] capitalize">
+            {item.type === 'text' && isCode ? 'Code' : fileExt || item.type}
           </span>
-          {item.type === 'text' && isCode && lineCount > 1 && (
-            <>
-              <span aria-hidden="true">·</span>
-              <span className="font-mono">{lineCount} lines</span>
-            </>
-          )}
           {item.fileSize !== undefined && (
             <>
               <span aria-hidden="true">·</span>
@@ -142,12 +136,6 @@ export function DropCard({
           )}
           <span aria-hidden="true">·</span>
           <span>{formatRelativeTime(item.createdAtMs)}</span>
-          {item.isLocalOnly && (
-            <>
-              <span aria-hidden="true">·</span>
-              <span className="text-[#8E877B] dark:text-[#777066]">Local</span>
-            </>
-          )}
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
@@ -160,23 +148,23 @@ export function DropCard({
                 aria-label={
                   isCode
                     ? `Switch "${itemDescriptor}" to plain text`
-                    : `Switch "${itemDescriptor}" to monospace code`
+                    : `Switch "${itemDescriptor}" to code`
                 }
-                className={`h-10 sm:h-8 px-2.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                title={isCode ? 'Plain text' : 'Code format'}
+                className={`h-9 w-9 sm:h-8 sm:w-8 rounded-lg transition-colors flex items-center justify-center cursor-pointer ${
                   isCode
                     ? 'bg-[#1D4ED8]/10 dark:bg-[#60A5FA]/15 text-[#1D4ED8] dark:text-[#60A5FA]'
-                    : 'text-[#6B655C] dark:text-[#968F84] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#F1EDE4] dark:hover:bg-[#25221E]'
+                    : 'text-[#787268] dark:text-[#8A8378] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#F1EDE4] dark:hover:bg-[#25221E] sm:opacity-65 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100'
                 }`}
               >
-                <Code2 className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>Code</span>
+                <Code2 className="w-4 h-4" aria-hidden="true" />
               </button>
 
               <button
                 type="button"
                 onClick={handleCopyText}
                 aria-label={`Copy text "${itemDescriptor}"`}
-                className="h-10 sm:h-8 px-3 rounded-lg bg-[#F5F2EB] dark:bg-[#22201C] border border-[#E2DCD0] dark:border-[#322E28] text-xs font-medium text-[#181715] dark:text-[#F3EFE8] hover:border-[#C5BDB0] dark:hover:border-[#4A453E] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                className="h-9 sm:h-8 px-2.5 rounded-lg bg-[#F5F2EB] dark:bg-[#22201C] border border-[#E2DCD0] dark:border-[#322E28] text-xs font-medium text-[#181715] dark:text-[#F3EFE8] hover:border-[#C5BDB0] dark:hover:border-[#4A453E] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
               >
                 {copiedLabel ? (
                   <Check className="w-3.5 h-3.5 text-[#15803D] dark:text-[#4ADE80]" aria-hidden="true" />
@@ -196,7 +184,7 @@ export function DropCard({
                 type="button"
                 onClick={handleCopyImage}
                 aria-label={`Copy image "${itemDescriptor}"`}
-                className="h-10 sm:h-8 px-3 rounded-lg bg-[#F5F2EB] dark:bg-[#22201C] border border-[#E2DCD0] dark:border-[#322E28] text-xs font-medium text-[#181715] dark:text-[#F3EFE8] hover:border-[#C5BDB0] dark:hover:border-[#4A453E] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                className="h-9 sm:h-8 px-2.5 rounded-lg bg-[#F5F2EB] dark:bg-[#22201C] border border-[#E2DCD0] dark:border-[#322E28] text-xs font-medium text-[#181715] dark:text-[#F3EFE8] hover:border-[#C5BDB0] dark:hover:border-[#4A453E] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
               >
                 {copiedLabel ? (
                   <Check className="w-3.5 h-3.5 text-[#15803D] dark:text-[#4ADE80]" aria-hidden="true" />
@@ -204,7 +192,7 @@ export function DropCard({
                   <Copy className="w-3.5 h-3.5" aria-hidden="true" />
                 )}
                 <span className={copiedLabel ? 'text-[#15803D] dark:text-[#4ADE80]' : ''}>
-                  {copiedLabel || 'Copy Image'}
+                  {copiedLabel || 'Copy'}
                 </span>
               </button>
 
@@ -212,10 +200,10 @@ export function DropCard({
                 type="button"
                 onClick={handleDownload}
                 aria-label={`Download image "${itemDescriptor}"`}
-                className="h-10 sm:h-8 px-2.5 rounded-lg text-xs font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#F1EDE4] dark:hover:bg-[#25221E] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                title="Download"
+                className="h-9 w-9 sm:h-8 sm:w-8 rounded-lg text-[#6B655C] dark:text-[#968F84] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#F1EDE4] dark:hover:bg-[#25221E] transition-colors flex items-center justify-center cursor-pointer sm:opacity-65 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
               >
-                <Download className="w-3.5 h-3.5" aria-hidden="true" />
-                <span className="hidden sm:inline">{downloadLabel || 'Download'}</span>
+                <Download className="w-4 h-4" aria-hidden="true" />
               </button>
             </>
           )}
@@ -225,7 +213,7 @@ export function DropCard({
               type="button"
               onClick={handleDownload}
               aria-label={`Download file "${itemDescriptor}"`}
-              className="h-10 sm:h-8 px-3 rounded-lg bg-[#F5F2EB] dark:bg-[#22201C] border border-[#E2DCD0] dark:border-[#322E28] text-xs font-medium text-[#181715] dark:text-[#F3EFE8] hover:border-[#C5BDB0] dark:hover:border-[#4A453E] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              className="h-9 sm:h-8 px-2.5 rounded-lg bg-[#F5F2EB] dark:bg-[#22201C] border border-[#E2DCD0] dark:border-[#322E28] text-xs font-medium text-[#181715] dark:text-[#F3EFE8] hover:border-[#C5BDB0] dark:hover:border-[#4A453E] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             >
               <Download className="w-3.5 h-3.5" aria-hidden="true" />
               <span>{downloadLabel || 'Download'}</span>
@@ -236,7 +224,8 @@ export function DropCard({
             type="button"
             onClick={() => onOpenQr(item)}
             aria-label={`Show QR code for "${itemDescriptor}"`}
-            className="h-10 w-10 sm:h-8 sm:w-8 rounded-lg text-[#6B655C] dark:text-[#968F84] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#F1EDE4] dark:hover:bg-[#25221E] transition-colors flex items-center justify-center cursor-pointer"
+            title="QR"
+            className="h-9 w-9 sm:h-8 sm:w-8 rounded-lg text-[#787268] dark:text-[#8A8378] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#F1EDE4] dark:hover:bg-[#25221E] transition-colors flex items-center justify-center cursor-pointer sm:opacity-65 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
           >
             <QrCode className="w-4 h-4" aria-hidden="true" />
           </button>
@@ -246,19 +235,20 @@ export function DropCard({
             onClick={handleDelete}
             disabled={deleting}
             aria-label={`Delete "${itemDescriptor}"`}
-            className="h-10 w-10 sm:h-8 sm:w-8 rounded-lg text-[#787268] dark:text-[#8A8378] hover:text-[#B91C1C] dark:hover:text-[#F87171] hover:bg-[#FEF2F2] dark:hover:bg-[#3A1717]/60 disabled:opacity-40 transition-colors flex items-center justify-center cursor-pointer"
+            title="Delete"
+            className="h-9 w-9 sm:h-8 sm:w-8 rounded-lg text-[#787268] dark:text-[#8A8378] hover:text-[#B91C1C] dark:hover:text-[#F87171] hover:bg-[#FEF2F2] dark:hover:bg-[#3A1717]/60 disabled:opacity-40 transition-colors flex items-center justify-center cursor-pointer sm:opacity-65 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
           >
             <Trash2 className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
       </div>
 
-      {/* Card Content Body */}
+      {/* Content Body */}
       {item.type === 'text' && (
         <div
           className={
             isCode
-              ? 'rounded-lg bg-[#F2EFE7] dark:bg-[#131210] border border-[#E5DFD3] dark:border-[#272420] p-4 overflow-x-auto'
+              ? 'rounded-lg bg-[#F2EFE7] dark:bg-[#131210] border border-[#E5DFD3] dark:border-[#272420] px-3.5 py-3 overflow-x-auto'
               : ''
           }
         >
@@ -267,7 +257,7 @@ export function DropCard({
               <code>{item.content}</code>
             </pre>
           ) : (
-            <p className="text-[15px] text-[#181715] dark:text-[#F3EFE8] whitespace-pre-wrap [overflow-wrap:anywhere] leading-[1.7] max-w-[72ch]">
+            <p className="text-[15px] text-[#181715] dark:text-[#F3EFE8] whitespace-pre-wrap [overflow-wrap:anywhere] leading-[1.65] max-w-[70ch]">
               {parseTextSegments(item.content).map((seg, idx) =>
                 seg.type === 'url' ? (
                   <a
@@ -275,7 +265,7 @@ export function DropCard({
                     href={seg.value}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[#1D4ED8] dark:text-[#60A5FA] hover:opacity-80 underline underline-offset-4 decoration-[#1D4ED8]/40 dark:decoration-[#60A5FA]/45 inline-flex items-baseline gap-1 [overflow-wrap:anywhere]"
+                    className="text-[#1D4ED8] dark:text-[#60A5FA] hover:opacity-80 underline underline-offset-4 decoration-[#1D4ED8]/35 dark:decoration-[#60A5FA]/40 inline-flex items-baseline gap-1 [overflow-wrap:anywhere]"
                   >
                     <span>{seg.value}</span>
                     <ExternalLink className="w-3 h-3 inline shrink-0 self-center" aria-hidden="true" />
@@ -290,35 +280,31 @@ export function DropCard({
       )}
 
       {item.type === 'image' && (
-        <div className="space-y-2.5">
+        <div className="space-y-2">
           {imageSrc && !imgBroken ? (
             <button
               type="button"
               onClick={() => onOpenImage(item)}
-              aria-label={`View full size image "${item.fileName || 'Dropped image'}"`}
-              className="group/img relative inline-block max-w-full rounded-lg overflow-hidden border border-[#E2DCD0] dark:border-[#2C2925] bg-[#F2EFE7] dark:bg-[#131210] text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1D4ED8]"
+              aria-label={`View full size image "${item.fileName || 'Image'}"`}
+              className="group/img block max-w-full rounded-lg overflow-hidden border border-[#E2DCD0] dark:border-[#2C2925] bg-[#F2EFE7] dark:bg-[#131210] cursor-zoom-in focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D4ED8]"
             >
               <img
                 src={imageSrc}
-                alt={item.fileName || 'Dropped image preview'}
+                alt={item.fileName || 'Dropped image'}
                 referrerPolicy="no-referrer"
                 onError={() => setImgBroken(true)}
-                className="block max-h-80 w-auto max-w-full object-contain transition-opacity duration-150 group-hover/img:opacity-95"
+                className="block max-h-72 w-auto max-w-full object-contain transition-transform duration-200 ease-out group-hover/img:scale-[1.01]"
               />
-              <span className="absolute bottom-2.5 right-2.5 h-8 px-2.5 rounded-md bg-[#181715]/85 backdrop-blur-sm text-xs font-medium text-[#FCFBF8] flex items-center gap-1.5 opacity-90 group-hover/img:opacity-100 transition-opacity">
-                <Maximize2 className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>Full size</span>
-              </span>
             </button>
           ) : (
             <div className="rounded-lg border border-[#E2DCD0] dark:border-[#2C2925] bg-[#F2EFE7] dark:bg-[#131210] px-4 py-8 flex flex-col items-center justify-center gap-2 text-[#787268] dark:text-[#8A8378]">
-              <FileImage className="w-6 h-6" aria-hidden="true" />
+              <FileImage className="w-5 h-5" aria-hidden="true" />
               <span className="text-xs">Preview unavailable</span>
             </div>
           )}
 
           {item.fileName && (
-            <p className="font-mono text-xs text-[#6B655C] dark:text-[#968F84] break-all">
+            <p className="font-mono text-xs text-[#787268] dark:text-[#8A8378] truncate">
               {item.fileName}
             </p>
           )}
@@ -326,18 +312,13 @@ export function DropCard({
       )}
 
       {item.type === 'file' && (
-        <div className="flex items-center gap-4 pt-1">
-          <div className="w-11 h-11 rounded-lg bg-[#F2EFE7] dark:bg-[#141311] border border-[#E2DCD0] dark:border-[#2C2925] flex items-center justify-center text-[#1D4ED8] dark:text-[#60A5FA] shrink-0">
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-lg bg-[#F2EFE7] dark:bg-[#141311] border border-[#E2DCD0] dark:border-[#2C2925] flex items-center justify-center text-[#1D4ED8] dark:text-[#60A5FA] shrink-0">
             <FileTypeIcon fileName={item.fileName} mimeType={item.mimeType} />
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-[#181715] dark:text-[#F3EFE8] break-words">
-              {item.fileName || 'Untitled file'}
-            </p>
-            <p className="font-mono text-xs text-[#6B655C] dark:text-[#968F84] mt-0.5 tabular-nums truncate">
-              {item.mimeType || 'application/octet-stream'} · {formatBytes(item.fileSize)}
-            </p>
-          </div>
+          <p className="text-sm font-medium text-[#181715] dark:text-[#F3EFE8] break-words min-w-0">
+            {item.fileName || 'Untitled file'}
+          </p>
         </div>
       )}
     </motion.article>

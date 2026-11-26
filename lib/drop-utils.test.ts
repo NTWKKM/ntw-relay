@@ -9,10 +9,12 @@ import {
   splitIntoChunkRanges,
   filterDrops,
   formatBytes,
+  formatFileTypeLabel,
   formatRelativeTime,
   generateDropId,
   getOldDropIds,
   getQrPayload,
+  isImeComposing,
   isSafeHttpUrl,
   looksLikeCode,
   parseTextSegments,
@@ -244,3 +246,19 @@ test('Firestore-chunked files are downloadable and QR points to the app instead 
   assert.ok(noApp.unavailableReason);
   assert.equal(getQrPayload(chunked, 'javascript:alert(1)').value, null);
 });
+
+test('formatFileTypeLabel produces concise extension labels without noisy MIME strings', () => {
+  assert.equal(formatFileTypeLabel('สรุปแผนงาน_2569.txt', 'text/plain;charset=utf-8'), 'TXT');
+  assert.equal(formatFileTypeLabel('diagram.svg', 'image/svg+xml'), 'SVG');
+  assert.equal(formatFileTypeLabel('archive.tar.gz', 'application/gzip'), 'GZ');
+  assert.equal(formatFileTypeLabel('noext', 'text/plain;charset=utf-8'), 'TXT');
+  assert.equal(formatFileTypeLabel('noext', 'application/octet-stream'), 'FILE');
+  assert.equal(formatFileTypeLabel(undefined, undefined), 'FILE');
+});
+
+test('isImeComposing guards against premature IME submission', () => {
+  assert.equal(isImeComposing({ isComposing: true, keyCode: 13 }), true);
+  assert.equal(isImeComposing({ isComposing: false, keyCode: 229 }), true);
+  assert.equal(isImeComposing({ isComposing: false, keyCode: 13 }), false);
+});
+

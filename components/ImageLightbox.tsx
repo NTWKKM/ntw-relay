@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { motion } from 'motion/react';
 import { Check, Copy, Download, QrCode, X } from 'lucide-react';
+import { ModalDialog } from './ModalDialog';
 import {
   copyImageToClipboard,
   downloadDropFile,
@@ -19,19 +19,9 @@ interface ImageLightboxProps {
 
 export function ImageLightbox({ item, onClose, onOpenQr }: ImageLightboxProps) {
   const [feedback, setFeedback] = useState<{ itemId: string; text: string } | null>(null);
-
   const [fullImage, setFullImage] = useState<{ itemId: string; url: string } | null>(null);
 
-  useEffect(() => {
-    if (!item) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [item, onClose]);
-
-  // Cloud images: show the inline preview immediately, then swap in the full chunked image
+  // Cloud images: display inline preview immediately, then swap in full chunked image
   useEffect(() => {
     if (!item || item.downloadUrl || typeof item.chunkCount !== 'number') return;
     let cancelled = false;
@@ -43,7 +33,7 @@ export function ImageLightbox({ item, onClose, onOpenQr }: ImageLightboxProps) {
         setFullImage({ itemId: item.id, url: objectUrl });
       })
       .catch(() => {
-        // Keep showing the preview if chunks cannot be loaded
+        // Keep preview if chunks fail to load
       });
     return () => {
       cancelled = true;
@@ -51,12 +41,12 @@ export function ImageLightbox({ item, onClose, onOpenQr }: ImageLightboxProps) {
     };
   }, [item]);
 
-  if (!item || !hasFileData(item)) return null;
-
-  const imageSrc =
-    item.downloadUrl ??
-    (fullImage && fullImage.itemId === item.id ? fullImage.url : item.previewDataUrl);
-  const copyFeedback = feedback && feedback.itemId === item.id ? feedback.text : null;
+  const isOpen = Boolean(item && hasFileData(item));
+  const imageSrc = item
+    ? item.downloadUrl ??
+      (fullImage && fullImage.itemId === item.id ? fullImage.url : item.previewDataUrl)
+    : undefined;
+  const copyFeedback = item && feedback && feedback.itemId === item.id ? feedback.text : null;
 
   async function handleCopyImage() {
     if (!item) return;
@@ -72,7 +62,7 @@ export function ImageLightbox({ item, onClose, onOpenQr }: ImageLightboxProps) {
     try {
       await downloadDropFile(item);
     } catch {
-      setFeedback({ itemId: item.id, text: 'Download failed' });
+      setFeedback({ itemId: item.id, text: 'Failed' });
       setTimeout(() => {
         setFeedback((prev) => (prev?.itemId === item.id ? null : prev));
       }, 2400);
@@ -80,87 +70,87 @@ export function ImageLightbox({ item, onClose, onOpenQr }: ImageLightboxProps) {
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.15 }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="lightbox-title"
-      className="fixed inset-0 z-50 flex flex-col bg-[#121110]/92 backdrop-blur-md p-4 sm:p-6"
-      onClick={onClose}
+    <ModalDialog
+      open={isOpen}
+      onClose={onClose}
+      ariaLabelledBy="lightbox-title"
+      variant="fullscreen"
     >
-      <div
-        className="max-w-5xl w-full mx-auto flex items-center justify-between gap-4 pb-4 border-b border-[#2C2925]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="min-w-0">
-          <h2
-            id="lightbox-title"
-            className="font-[family-name:var(--font-display)] text-base font-medium text-[#F3EFE8] truncate"
+      {item && (
+        <div
+          className="h-dvh w-screen flex flex-col bg-[#121110]/94 p-4 sm:p-6"
+          onClick={onClose}
+        >
+          <div
+            className="max-w-5xl w-full mx-auto flex items-center justify-between gap-4 pb-4 border-b border-[#2C2925]"
+            onClick={(e) => e.stopPropagation()}
           >
-            {item.fileName || 'Dropped Image'}
-          </h2>
-          <p className="font-mono text-xs text-[#A8A196] tabular-nums mt-0.5">
-            {formatBytes(item.fileSize)} · {formatRelativeTime(item.createdAtMs)}
-          </p>
+            <div className="min-w-0">
+              <h2
+                id="lightbox-title"
+                className="font-[family-name:var(--font-display)] text-base font-medium text-[#F3EFE8] truncate"
+              >
+                {item.fileName || 'Image'}
+              </h2>
+              <p className="font-mono text-xs text-[#A8A196] tabular-nums mt-0.5">
+                {formatBytes(item.fileSize)} · {formatRelativeTime(item.createdAtMs)}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleCopyImage}
+                className="h-9 px-3 rounded-lg bg-[#1E1C1A] border border-[#322E28] text-xs sm:text-sm font-medium text-[#F3EFE8] hover:bg-[#2A2723] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              >
+                {copyFeedback ? (
+                  <Check className="w-4 h-4 text-[#4ADE80]" aria-hidden="true" />
+                ) : (
+                  <Copy className="w-4 h-4" aria-hidden="true" />
+                )}
+                <span>{copyFeedback || 'Copy'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownload}
+                className="h-9 px-3 rounded-lg bg-[#F3EFE8] text-[#121110] text-xs sm:text-sm font-medium hover:bg-[#E2DBD0] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              >
+                <Download className="w-4 h-4" aria-hidden="true" />
+                <span className="hidden sm:inline">Download</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onOpenQr(item)}
+                aria-label="Show QR code for image"
+                className="h-9 w-9 rounded-lg bg-[#1E1C1A] border border-[#322E28] text-[#CFC8BC] hover:text-[#F3EFE8] hover:bg-[#2A2723] transition-colors flex items-center justify-center cursor-pointer"
+              >
+                <QrCode className="w-4 h-4" aria-hidden="true" />
+              </button>
+
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close image preview"
+                className="h-9 w-9 rounded-lg bg-[#1E1C1A] border border-[#322E28] text-[#CFC8BC] hover:text-[#F3EFE8] hover:bg-[#2A2723] transition-colors flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 flex items-center justify-center py-6 overflow-hidden">
+            <img
+              src={imageSrc}
+              alt={item.fileName || 'Full size preview'}
+              referrerPolicy="no-referrer"
+              className="max-h-full max-w-full object-contain rounded-lg border border-[#2C2925] shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
         </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={handleCopyImage}
-            className="h-9 px-3.5 rounded-lg bg-[#1E1C1A] border border-[#322E28] text-xs sm:text-sm font-medium text-[#F3EFE8] hover:bg-[#2A2723] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-          >
-            {copyFeedback ? (
-              <Check className="w-4 h-4 text-[#4ADE80]" />
-            ) : (
-              <Copy className="w-4 h-4" />
-            )}
-            <span>{copyFeedback || 'Copy Image'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleDownload}
-            className="h-9 px-3.5 rounded-lg bg-[#F3EFE8] text-[#121110] text-xs sm:text-sm font-medium hover:bg-[#E2DBD0] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-          >
-            <Download className="w-4 h-4" />
-            <span>Download</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onOpenQr(item)}
-            aria-label="Show QR code for image"
-            className="h-9 w-9 rounded-lg bg-[#1E1C1A] border border-[#322E28] text-[#CFC8BC] hover:text-[#F3EFE8] hover:bg-[#2A2723] transition-colors flex items-center justify-center cursor-pointer"
-          >
-            <QrCode className="w-4 h-4" />
-          </button>
-
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close image preview"
-            className="h-9 w-9 rounded-lg bg-[#1E1C1A] border border-[#322E28] text-[#CFC8BC] hover:text-[#F3EFE8] hover:bg-[#2A2723] transition-colors flex items-center justify-center cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      <div
-        className="flex-1 flex items-center justify-center py-6 overflow-hidden"
-        onClick={onClose}
-      >
-        <img
-          src={imageSrc}
-          alt={item.fileName || 'Full size preview'}
-          referrerPolicy="no-referrer"
-          className="max-h-full max-w-full object-contain rounded-lg border border-[#2C2925] shadow-2xl"
-          onClick={(e) => e.stopPropagation()}
-        />
-      </div>
-    </motion.div>
+      )}
+    </ModalDialog>
   );
 }

@@ -5,12 +5,11 @@ import {
   AlertCircle,
   CheckCircle2,
   ClipboardPaste,
-  CornerDownLeft,
   FileUp,
+  Paperclip,
   Send,
-  Upload,
 } from 'lucide-react';
-import { formatBytes, MAX_TEXT_LENGTH } from '@/lib/drop-utils';
+import { formatBytes, isImeComposing, MAX_TEXT_LENGTH } from '@/lib/drop-utils';
 import type { UploadTaskState } from '@/lib/types';
 
 interface DropComposerProps {
@@ -30,29 +29,33 @@ export function DropComposer({
   const [sending, setSending] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const dragDepthRef = useRef(0);
 
-  // Auto-expand textarea height up to 240px
+  // Fallback JS auto-grow strictly for browsers without native CSS `field-sizing: content`
   useEffect(() => {
+    if (typeof CSS !== 'undefined' && CSS.supports?.('field-sizing', 'content')) {
+      return;
+    }
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    const nextHeight = Math.min(Math.max(el.scrollHeight, 120), 240);
+    const nextHeight = Math.min(Math.max(el.scrollHeight, 84), 256);
     el.style.height = `${nextHeight}px`;
   }, [text]);
 
-  async function handleSubmitText() {
+  async function submitText() {
     setError(null);
     const trimmed = text.trim();
     if (!trimmed) {
-      setError('Enter text or paste a link to send.');
+      setError('Enter text or a link first.');
       textareaRef.current?.focus();
       return;
     }
     if (trimmed.length > MAX_TEXT_LENGTH) {
-      setError(`Text exceeds the ${MAX_TEXT_LENGTH.toLocaleString()} character limit.`);
+      setError(`Max ${MAX_TEXT_LENGTH.toLocaleString()} characters.`);
       return;
     }
 
@@ -60,13 +63,31 @@ export function DropComposer({
     try {
       await onSendText(trimmed);
       setText('');
-      if (textareaRef.current) {
-        textareaRef.current.style.height = '120px';
+      if (
+        textareaRef.current &&
+        !(typeof CSS !== 'undefined' && CSS.supports?.('field-sizing', 'content'))
+      ) {
+        textareaRef.current.style.height = '84px';
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send text.');
+      setError(err instanceof Error ? err.message : 'Send failed.');
     } finally {
       setSending(false);
+    }
+  }
+
+  function handleFormSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    void submitText();
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      if (isImeComposing({ isComposing: e.nativeEvent.isComposing, keyCode: e.keyCode })) {
+        return;
+      }
+      formRef.current?.requestSubmit();
     }
   }
 
@@ -105,17 +126,10 @@ export function DropComposer({
         setText((prev) => (prev ? `${prev}\n${clipText}` : clipText));
         textareaRef.current?.focus();
       } else {
-        setError('Clipboard read is not supported in this browser. Press Cmd/Ctrl+V directly.');
+        setError('Press Cmd/Ctrl+V directly.');
       }
     } catch {
-      setError('Clipboard access was denied. Press Cmd/Ctrl+V directly inside the page.');
-    }
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      e.preventDefault();
-      void handleSubmitText();
+      setError('Press Cmd/Ctrl+V directly.');
     }
   }
 
@@ -170,149 +184,133 @@ export function DropComposer({
   }
 
   return (
-    <section aria-label="Quick input and file drop" className="space-y-3">
-      {/* Unified Architectural Dispatch Surface: single surface split by a 1px structural divider */}
-      <div className="rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] overflow-hidden grid grid-cols-1 lg:grid-cols-[1fr_296px] items-stretch focus-within:border-[#BFB7A8] dark:focus-within:border-[#454039] transition-colors">
-        {/* Left: Text, Link & Code Writing Desk */}
-        <div className="p-5 sm:p-6 flex flex-col justify-between gap-4">
-          <div>
-            <label htmlFor="drop-text-input" className="sr-only">
-              Drop text, links, or code
-            </label>
-            <textarea
-              id="drop-text-input"
-              ref={textareaRef}
-              value={text}
-              onChange={(e) => {
-                setText(e.target.value);
-                if (error) setError(null);
-              }}
-              onKeyDown={handleKeyDown}
-              disabled={disabled || sending}
-              placeholder="Write a note, paste a URL or code snippet, or press Cmd/Ctrl+V anywhere to send a screenshot..."
-              rows={4}
-              className="w-full min-h-[120px] resize-none bg-transparent text-[15px] text-[#181715] dark:text-[#F3EFE8] placeholder:text-[#8E877B] dark:placeholder:text-[#6E685F] focus:outline-none leading-[1.65]"
-            />
-          </div>
+    <section aria-label="Compose drop" className="space-y-3">
+      {/* Unified Writing & File Drop Surface — entire surface accepts drag-and-drop */}
+      <form
+        ref={formRef}
+        onSubmit={handleFormSubmit}
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        noValidate
+        className={`relative rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border transition-colors ${
+          isDragging
+            ? 'border-[#1D4ED8] dark:border-[#60A5FA] bg-[#1D4ED8]/[0.03] dark:bg-[#60A5FA]/[0.06]'
+            : 'border-[#E2DCD0] dark:border-[#2C2925] focus-within:border-[#BFB7A8] dark:focus-within:border-[#454039]'
+        }`}
+      >
+        <input
+          ref={fileInputRef}
+          id="file-upload-input"
+          type="file"
+          multiple
+          onChange={handleFileChange}
+          className="sr-only"
+          aria-label="Attach files or images"
+        />
 
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-3.5 border-t border-[#ECE7DD] dark:border-[#272420]">
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={handlePasteButton}
-                disabled={disabled || sending}
-                className="h-9 px-3 rounded-lg bg-[#F5F2EB] dark:bg-[#141311] border border-[#DDD6C8] dark:border-[#2E2A25] text-xs font-medium text-[#3D3A35] dark:text-[#CFC8BC] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:border-[#C7BFB0] dark:hover:border-[#443F38] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
-              >
-                <ClipboardPaste className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>Paste Clipboard</span>
-              </button>
-
-              {text.length > 0 && (
-                <span className="font-mono text-xs text-[#787268] dark:text-[#8A8378] tabular-nums hidden sm:inline">
-                  {text.length.toLocaleString()} chars
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-3">
-              <span className="hidden sm:inline-flex items-center gap-1 font-mono text-[11px] text-[#787268] dark:text-[#8A8378]">
-                <span>Cmd/Ctrl</span>
-                <CornerDownLeft className="w-3 h-3" aria-hidden="true" />
-              </span>
-              <button
-                type="button"
-                onClick={handleSubmitText}
-                disabled={disabled || sending}
-                className="h-9 px-4 rounded-lg bg-[#181715] hover:bg-[#2E2C28] dark:bg-[#F3EFE8] dark:hover:bg-[#E2DBD0] disabled:opacity-50 text-[#FCFBF8] dark:text-[#121110] text-xs sm:text-sm font-medium transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
-              >
-                <Send className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>{sending ? 'Sending...' : 'Send'}</span>
-              </button>
-            </div>
-          </div>
+        <div className="px-4 sm:px-5 pt-4 pb-3">
+          <label htmlFor="drop-text-input" className="sr-only">
+            Drop text, links, or code
+          </label>
+          <textarea
+            id="drop-text-input"
+            ref={textareaRef}
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value);
+              if (error) setError(null);
+            }}
+            onKeyDown={handleKeyDown}
+            disabled={disabled || sending}
+            placeholder="Paste text, link, code, or drop files..."
+            rows={3}
+            className="mwg-autogrow w-full resize-none bg-transparent text-[15px] text-[#181715] dark:text-[#F3EFE8] placeholder:text-[#8E877B] dark:placeholder:text-[#6E685F] focus:outline-none leading-[1.6]"
+          />
         </div>
 
-        {/* Right: Tactile File & Screenshot Drop Tray */}
-        <div
-          onDragEnter={handleDragEnter}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          className={`p-5 sm:p-6 border-t lg:border-t-0 lg:border-l flex flex-col items-center justify-center text-center gap-3.5 transition-colors ${
-            isDragging
-              ? 'bg-[#1D4ED8]/8 dark:bg-[#60A5FA]/10 border-[#1D4ED8] dark:border-[#60A5FA]'
-              : 'bg-[#F7F4EE] dark:bg-[#161513] border-[#E2DCD0] dark:border-[#2C2925]'
-          }`}
-        >
-          <input
-            ref={fileInputRef}
-            id="file-upload-input"
-            type="file"
-            multiple
-            onChange={handleFileChange}
-            className="sr-only"
-            aria-label="Choose files or images to upload"
-          />
+        <div className="px-3.5 sm:px-4 py-2.5 border-t border-[#ECE7DD] dark:border-[#272420] flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={disabled || sending}
+              aria-label="Attach files up to 10 MB"
+              title="Attach files (max 10 MB)"
+              className="h-9 px-2.5 rounded-lg text-xs font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#F2EFE7] dark:hover:bg-[#25221E] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <Paperclip className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Attach</span>
+            </button>
 
-          <div
-            className={`w-10 h-10 rounded-lg flex items-center justify-center border transition-colors ${
-              isDragging
-                ? 'bg-[#1D4ED8]/12 dark:bg-[#60A5FA]/15 border-[#1D4ED8]/40 text-[#1D4ED8] dark:text-[#60A5FA]'
-                : 'bg-[#FCFBF8] dark:bg-[#1E1C1A] border-[#DDD6C8] dark:border-[#2E2A25] text-[#5D5850] dark:text-[#A8A196]'
-            }`}
-          >
-            {isDragging ? (
-              <FileUp className="w-4 h-4" aria-hidden="true" />
-            ) : (
-              <Upload className="w-4 h-4" aria-hidden="true" />
+            <button
+              type="button"
+              onClick={handlePasteButton}
+              disabled={disabled || sending}
+              aria-label="Paste from clipboard"
+              className="h-9 px-2.5 rounded-lg text-xs font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#F2EFE7] dark:hover:bg-[#25221E] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <ClipboardPaste className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Paste</span>
+            </button>
+
+            {text.length > 0 && (
+              <span className="font-mono text-[11px] text-[#787268] dark:text-[#8A8378] tabular-nums pl-1.5 hidden sm:inline">
+                {text.length.toLocaleString()}
+              </span>
             )}
           </div>
 
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-[#181715] dark:text-[#F3EFE8]">
-              {isDragging ? 'Release to transfer' : 'Drop files or images'}
-            </p>
-            <p className="text-xs text-[#6B655C] dark:text-[#968F84] leading-relaxed max-w-[220px]">
-              Multi-file handoff up to 10 MB · Paste screenshots anywhere
-            </p>
+          <div className="flex items-center gap-2.5">
+            <kbd className="hidden sm:inline font-mono text-[11px] text-[#8E877B] dark:text-[#777066]">
+              ⌘↵
+            </kbd>
+            <button
+              type="submit"
+              disabled={disabled || sending}
+              className="h-9 px-4 rounded-lg bg-[#181715] hover:bg-[#2E2C28] dark:bg-[#F3EFE8] dark:hover:bg-[#E2DBD0] disabled:opacity-50 text-[#FCFBF8] dark:text-[#121110] text-xs sm:text-sm font-medium transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <Send className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>{sending ? 'Sending...' : 'Send'}</span>
+            </button>
           </div>
-
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={disabled}
-            className="h-9 px-4 rounded-lg bg-[#FCFBF8] dark:bg-[#1E1C1A] border border-[#DDD6C8] dark:border-[#322E28] text-xs font-medium text-[#181715] dark:text-[#F3EFE8] hover:border-[#B9B0A0] dark:hover:border-[#4A453E] transition-colors cursor-pointer whitespace-nowrap shrink-0"
-          >
-            Choose Files
-          </button>
         </div>
-      </div>
 
-      {/* Inline validation or clipboard error */}
+        {/* Active Drag Overlay */}
+        {isDragging && (
+          <div className="pointer-events-none absolute inset-0 rounded-xl bg-[#FCFBF8]/92 dark:bg-[#1A1917]/92 flex items-center justify-center gap-2 text-sm font-medium text-[#1D4ED8] dark:text-[#60A5FA]">
+            <FileUp className="w-4 h-4" aria-hidden="true" />
+            <span>Drop to upload</span>
+          </div>
+        )}
+      </form>
+
+      {/* Inline Validation Error */}
       {error && (
         <div
           role="alert"
-          className="rounded-lg bg-[#FEF2F2] dark:bg-[#3A1717]/60 border border-[#FECACA] dark:border-[#7F1D1D]/70 px-4 py-2.5 text-xs sm:text-sm text-[#991B1B] dark:text-[#FCA5A5] flex items-center gap-2"
+          className="rounded-lg bg-[#FEF2F2] dark:bg-[#3A1717]/60 border border-[#FECACA] dark:border-[#7F1D1D]/70 px-3.5 py-2 text-xs text-[#991B1B] dark:text-[#FCA5A5] flex items-center gap-2"
         >
-          <AlertCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
           <span>{error}</span>
         </div>
       )}
 
-      {/* Real-time Upload Progress Queue */}
+      {/* Upload Progress Queue */}
       {uploads.length > 0 && (
         <div
           aria-live="polite"
           className="rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] divide-y divide-[#ECE7DD] dark:divide-[#272420]"
         >
           {uploads.map((task) => (
-            <div key={task.id} className="px-5 py-3.5 space-y-2">
+            <div key={task.id} className="px-4 py-3 space-y-2">
               <div className="flex items-center justify-between gap-3 text-xs">
                 <div className="flex items-center gap-2 min-w-0">
                   {task.status === 'done' ? (
-                    <CheckCircle2 className="w-4 h-4 text-[#15803D] dark:text-[#4ADE80] shrink-0" aria-hidden="true" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[#15803D] dark:text-[#4ADE80] shrink-0" aria-hidden="true" />
                   ) : task.status === 'error' ? (
-                    <AlertCircle className="w-4 h-4 text-[#B91C1C] dark:text-[#F87171] shrink-0" aria-hidden="true" />
+                    <AlertCircle className="w-3.5 h-3.5 text-[#B91C1C] dark:text-[#F87171] shrink-0" aria-hidden="true" />
                   ) : null}
                   <span className="font-medium text-[#181715] dark:text-[#F3EFE8] truncate">
                     {task.fileName}
@@ -321,15 +319,11 @@ export function DropComposer({
                 <div className="font-mono text-[11px] text-[#6B655C] dark:text-[#968F84] tabular-nums shrink-0">
                   {task.status === 'error' ? (
                     <span className="text-[#B91C1C] dark:text-[#F87171]">
-                      {task.errorMessage || 'Upload failed'}
+                      {task.errorMessage || 'Failed'}
                     </span>
                   ) : (
                     <>
-                      {formatBytes(task.bytesTransferred)} / {formatBytes(task.fileSize)}
-                      {task.speedBps > 0 && task.status === 'uploading' && (
-                        <> · {formatBytes(task.speedBps)}/s</>
-                      )}
-                      {' · '}
+                      {formatBytes(task.fileSize)} ·{' '}
                       <span className="text-[#181715] dark:text-[#F3EFE8] font-medium">
                         {task.progress}%
                       </span>

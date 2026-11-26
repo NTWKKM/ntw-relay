@@ -347,3 +347,38 @@ export function buildAppShareUrl(origin: string, basePath: string = ''): string 
   if (!cleanOrigin) return '';
   return cleanBase ? `${cleanOrigin}/${cleanBase}/` : cleanOrigin;
 }
+
+/**
+ * Returns a short, noise-free file type label (e.g. "PDF", "TXT", "ZIP") instead of raw MIME strings.
+ */
+export function formatFileTypeLabel(fileName?: string, mimeType?: string): string {
+  const name = (fileName || '').trim();
+  const dotIdx = name.lastIndexOf('.');
+  if (dotIdx > 0 && dotIdx < name.length - 1) {
+    const ext = name.slice(dotIdx + 1).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    if (ext.length >= 1 && ext.length <= 6) {
+      return ext;
+    }
+  }
+
+  const mime = (mimeType || '').split(';')[0].trim().toLowerCase();
+  if (mime.includes('/')) {
+    const sub = mime.split('/')[1];
+    if (sub === 'plain') return 'TXT';
+    if (sub === 'svg+xml') return 'SVG';
+    if (sub === 'octet-stream') return 'FILE';
+    const cleanSub = sub.replace(/[^a-z0-9]/gi, '').toUpperCase();
+    if (cleanSub.length >= 1 && cleanSub.length <= 6) return cleanSub;
+  }
+
+  return 'FILE';
+}
+
+/**
+ * IME-safe check (Modern Web Guidance `ime-safe-enter-submit` Strategy 1):
+ * blocks premature submit while an IME is composing or during Safari's keyCode 229 window.
+ */
+export function isImeComposing(event: { isComposing?: boolean; keyCode?: number }): boolean {
+  return Boolean(event.isComposing) || event.keyCode === 229;
+}
+
