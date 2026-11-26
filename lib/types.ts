@@ -12,8 +12,12 @@ export interface DropItem {
   fileName?: string;
   fileSize?: number;
   mimeType?: string;
+  /** Local Demo Mode only: data:/blob: URL. Cloud files use Firestore chunks instead. */
   downloadUrl?: string;
-  storagePath?: string;
+  /** Number of Bytes chunk documents under drops/{id}/chunks (cloud files/images). */
+  chunkCount?: number;
+  /** Small inline JPEG data URL (images only) so the feed renders without loading chunks. */
+  previewDataUrl?: string;
   isCode?: boolean;
   createdAtMs: number;
   /** True when stored only in localStorage demo mode (no public cloud URL) */

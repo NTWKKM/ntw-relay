@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchCloudDropBlob } from './drops-service';
 import type { DropItem } from './types';
 
 export async function copyTextToClipboard(text: string): Promise<boolean> {
@@ -28,124 +29,101 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 }
 
-async function convertImageUrlToPngBlob(url: string): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth || 1200;
-        canvas.height = img.naturalHeight || 750;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          reject(new Error('Canvas context unavailable'));
-          return;
+async function convertBlobToPng(blob: Blob): Promise<Blob> {
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    return await new Promise<Blob>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || 1200;
+          canvas.height = img.naturalHeight || 750;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Canvas context unavailable'));
+            return;
+          }
+          ctx.drawImage(img, 0, 0);
+          canvas.toBlob((png) => {
+            if (png) resolve(png);
+            else reject(new Error('PNG conversion failed'));
+          }, 'image/png');
+        } catch (err) {
+          reject(err);
         }
-        ctx.drawImage(img, 0, 0);
-        canvas.toBlob((blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error('PNG conversion failed'));
-        }, 'image/png');
-      } catch (err) {
-        reject(err);
-      }
-    };
-    img.onerror = () => reject(new Error('Image load failed (check Storage CORS policy)'));
-    img.src = url;
-  });
+      };
+      img.onerror = () => reject(new Error('Image decode failed'));
+      img.src = objectUrl;
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }
 
 /**
- * Copies an image to the system clipboard as PNG (supported across Safari, Chrome, Edge).
- * Falls back to copying the direct download URL if ClipboardItem is unavailable or CORS blocks pixel reads.
+ * Resolves the full file bytes for a drop: Firestore chunks for cloud items,
+ * or the local data:/blob: URL for Demo Mode items.
+ */
+export async function resolveDropBlob(item: DropItem): Promise<Blob> {
+  if (typeof item.chunkCount === 'number' && !item.isLocalOnly) {
+    return fetchCloudDropBlob(item);
+  }
+  if (item.downloadUrl) {
+    const res = await fetch(item.downloadUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.blob();
+  }
+  throw new Error('No file data available for this item.');
+}
+
+/**
+ * Copies a drop's full-resolution image to the system clipboard as PNG.
+ * The Blob promise is handed to ClipboardItem synchronously so Safari keeps the user gesture.
  */
 export async function copyImageToClipboard(
-  url: string
-): Promise<{ mode: 'image' | 'url' | 'error'; message: string }> {
+  item: DropItem
+): Promise<{ mode: 'image' | 'error'; message: string }> {
+  if (typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) {
+    return { mode: 'error', message: 'Copy blocked by browser' };
+  }
   try {
-    if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
-      let pngBlob: Blob | null = null;
-
-      if (url.startsWith('data:image/png')) {
-        const res = await fetch(url);
-        pngBlob = await res.blob();
-      } else {
-        try {
-          const res = await fetch(url, { mode: 'cors' });
-          const rawBlob = await res.blob();
-          if (rawBlob.type === 'image/png') {
-            pngBlob = rawBlob;
-          } else {
-            const objUrl = URL.createObjectURL(rawBlob);
-            try {
-              pngBlob = await convertImageUrlToPngBlob(objUrl);
-            } finally {
-              URL.revokeObjectURL(objUrl);
-            }
-          }
-        } catch {
-          pngBlob = await convertImageUrlToPngBlob(url);
-        }
-      }
-
-      if (pngBlob) {
-        await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
-        return { mode: 'image', message: 'Image copied!' };
-      }
-    }
+    const pngPromise = resolveDropBlob(item).then((blob) =>
+      blob.type === 'image/png' ? blob : convertBlobToPng(blob)
+    );
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngPromise })]);
+    return { mode: 'image', message: 'Image copied!' };
   } catch {
-    // Fall back to copying URL if direct image clipboard write is blocked
+    return { mode: 'error', message: 'Copy failed' };
   }
+}
 
-  if (url.startsWith('https://') || url.startsWith('http://')) {
-    const copied = await copyTextToClipboard(url);
-    if (copied) {
-      return { mode: 'url', message: 'Link copied!' };
-    }
-  }
-
-  return { mode: 'error', message: 'Copy blocked by browser' };
+function triggerAnchorDownload(href: string, fileName: string) {
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 /**
  * Triggers a clean file download preserving UTF-8 / Thai filenames.
+ * Throws when cloud chunks cannot be loaded so callers can surface the failure.
  */
 export async function downloadDropFile(item: DropItem): Promise<void> {
-  if (!item.downloadUrl) return;
-  const fileName = item.fileName || `personal-drop-${item.id}`;
+  const fileName = item.fileName || `ntw-relay-${item.id}`;
 
-  try {
-    if (item.downloadUrl.startsWith('data:') || item.downloadUrl.startsWith('blob:')) {
-      const a = document.createElement('a');
-      a.href = item.downloadUrl;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      return;
-    }
-
-    const res = await fetch(item.downloadUrl, { mode: 'cors' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = objectUrl;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-  } catch {
-    // Direct anchor download fallback if remote CORS header isn't configured yet
-    const a = document.createElement('a');
-    a.href = item.downloadUrl;
-    a.download = fileName;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  if (
+    item.downloadUrl &&
+    (item.downloadUrl.startsWith('data:') || item.downloadUrl.startsWith('blob:'))
+  ) {
+    triggerAnchorDownload(item.downloadUrl, fileName);
+    return;
   }
+
+  const blob = await resolveDropBlob(item);
+  const objectUrl = URL.createObjectURL(blob);
+  triggerAnchorDownload(objectUrl, fileName);
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }

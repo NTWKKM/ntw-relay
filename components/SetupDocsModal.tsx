@@ -4,103 +4,178 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { Check, Copy, X } from 'lucide-react';
 import { copyTextToClipboard } from '@/lib/clipboard-actions';
-import { firebaseRuntimeConfig } from '@/lib/firebase';
 
-type DocTab = 'firestore' | 'storage' | 'cors' | 'deploy';
+type DocTab = 'firestore' | 'deploy';
 
 interface SetupDocsModalProps {
   open: boolean;
   onClose: () => void;
 }
 
+// Mirrors firestore.rules (keep in sync when rules change)
 const FIRESTORE_RULES_SNIPPET = `rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} { allow read, write: if false; }
+    // Pillar 1: Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
 
-    function isSignedIn() { return request.auth != null; }
-    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
-    function isValidId(id) { return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\\\-]+$'); }
+    // Phase 3: Reusable Hardened Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
 
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: /drops/{dropId}
+    // Document ID: 1..128 chars [a-zA-Z0-9_-]
+    // Fields:
+    //   - ownerId: string (required, immutable, == request.auth.uid)
+    //   - type: string (required, 'text' | 'image' | 'file')
+    //   - content: string (required, <= 50000)
+    //   - fileName: string (optional, <= 255)
+    //   - fileSize: number (optional, 0..10485760 [10 MiB])
+    //   - mimeType: string (optional, <= 128)
+    //   - chunkCount: int (optional, 0..14)
+    //   - previewDataUrl: string (optional, <= 160000, JPEG base64 data URL)
+    //   - isCode: bool (optional, mutable by owner)
+    //   - createdAt: timestamp (required, immutable, == request.time on create)
+    //
+    // Subcollection: /drops/{dropId}/chunks/{chunkId}
+    // Document ID: ^[0-9]{1,2}$ matching string(index) ('0'..'13')
+    // Note: Chunks are written before the parent /drops/{dropId} document exists,
+    // so create rules do not require get() of the parent document.
+    // Fields:
+    //   - ownerId: string (required, == request.auth.uid)
+    //   - index: int (required, 0..13)
+    //   - data: bytes (required, size 1..786432 [768 KiB])
+    //
+    // ===============================================================
+
+    // Pillar 2: Validation Blueprint (Firestore-only chunked storage)
     function isValidDrop(data) {
       return data.keys().hasAll(['ownerId', 'type', 'content', 'createdAt'])
-        && data.keys().hasOnly(['ownerId', 'type', 'content', 'fileName', 'fileSize', 'mimeType', 'downloadUrl', 'storagePath', 'isCode', 'createdAt'])
+        && data.keys().hasOnly([
+          'ownerId',
+          'type',
+          'content',
+          'fileName',
+          'fileSize',
+          'mimeType',
+          'chunkCount',
+          'previewDataUrl',
+          'isCode',
+          'createdAt'
+        ])
+        && data.ownerId is string
+        && data.ownerId.size() >= 1
+        && data.ownerId.size() <= 128
+        && data.ownerId.matches('^[a-zA-Z0-9_\\\\-]+$')
         && data.ownerId == request.auth.uid
         && data.type in ['text', 'image', 'file']
-        && data.content is string && data.content.size() <= 50000
+        && data.content is string
+        && data.content.size() <= 50000
         && data.createdAt is timestamp
         && (!('fileName' in data) || (data.fileName is string && data.fileName.size() <= 255))
-        && (!('fileSize' in data) || (data.fileSize is number && data.fileSize >= 0 && data.fileSize <= 524288000))
-        && (!('downloadUrl' in data) || (data.downloadUrl is string && data.downloadUrl.size() <= 2048 && data.downloadUrl.matches('^https://.*$')))
-        && (!('storagePath' in data) || (data.storagePath is string && data.storagePath.size() <= 512 && data.storagePath.matches('^drops/' + request.auth.uid + '/.*$')))
-        && (!('isCode' in data) || data.isCode is bool);
+        && (!('fileSize' in data) || (data.fileSize is number && data.fileSize >= 0 && data.fileSize <= 10485760))
+        && (!('mimeType' in data) || (data.mimeType is string && data.mimeType.size() <= 128))
+        && (!('chunkCount' in data) || (data.chunkCount is int && data.chunkCount >= 0 && data.chunkCount <= 14))
+        && (!('previewDataUrl' in data) || (data.previewDataUrl is string && data.previewDataUrl.size() <= 160000 && data.previewDataUrl.matches('^data:image/jpeg;base64,[A-Za-z0-9+/=]+$')))
+        && (!('isCode' in data) || (data.isCode is bool));
     }
 
+    function isValidChunk(data, chunkId) {
+      return data.keys().hasAll(['ownerId', 'index', 'data'])
+        && data.keys().hasOnly(['ownerId', 'index', 'data'])
+        && data.ownerId is string
+        && data.ownerId.size() >= 1
+        && data.ownerId.size() <= 128
+        && data.ownerId == request.auth.uid
+        && data.index is int
+        && data.index >= 0
+        && data.index <= 13
+        && chunkId.matches('^[0-9]{1,2}$')
+        && chunkId == string(data.index)
+        && data.data is bytes
+        && data.data.size() >= 1
+        && data.data.size() <= 786432;
+    }
+
+    // Personal Drop Collection: Private Single-Owner Drops
     match /drops/{dropId} {
-      allow get: if isSignedIn() && isValidId(dropId) && resource.data.ownerId == request.auth.uid;
-      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
-      allow create: if isVerified() && isValidId(dropId) && isValidDrop(request.resource.data) && request.resource.data.createdAt == request.time;
-      allow update: if isVerified() && isValidId(dropId) && isValidDrop(request.resource.data)
-        && resource.data.ownerId == request.auth.uid
-        && request.resource.data.ownerId == resource.data.ownerId
-        && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isCode']);
-      allow delete: if isVerified() && isValidId(dropId) && resource.data.ownerId == request.auth.uid;
+      // Single-document read: strict owner isolation + Path ID hardening
+      allow get: if isSignedIn()
+        && isValidId(dropId)
+        && existing().ownerId == request.auth.uid;
+
+      // Pillar 8: Secure List Query (no isValidId, no get(), strict rule-side owner filter)
+      allow list: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid;
+
+      // Create: Auth -> Static Validation -> Temporal Integrity
+      allow create: if isVerified()
+        && isValidId(dropId)
+        && isValidDrop(incoming())
+        && incoming().createdAt == request.time;
+
+      // Pillar 4 & 5: Action-Based Update (only toggling isCode; ownerId & createdAt immutable)
+      allow update: if isVerified()
+        && isValidId(dropId)
+        && isValidDrop(incoming())
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['isCode']);
+
+      // Delete: Verified owner only + Path ID hardening
+      allow delete: if isVerified()
+        && isValidId(dropId)
+        && existing().ownerId == request.auth.uid;
+
+      // Chunked Binary Storage Subcollection (written before parent drop doc)
+      match /chunks/{chunkId} {
+        allow get: if isSignedIn()
+          && isValidId(dropId)
+          && chunkId.matches('^[0-9]{1,2}$')
+          && existing().ownerId == request.auth.uid;
+
+        allow list: if isSignedIn()
+          && resource.data.ownerId == request.auth.uid;
+
+        allow create: if isVerified()
+          && isValidId(dropId)
+          && isValidChunk(incoming(), chunkId);
+
+        allow update: if false;
+
+        allow delete: if isVerified()
+          && isValidId(dropId)
+          && chunkId.matches('^[0-9]{1,2}$')
+          && existing().ownerId == request.auth.uid;
+      }
     }
   }
 }`;
-
-const STORAGE_RULES_SNIPPET = `rules_version = '2';
-
-service firebase.storage {
-  match /b/{bucket}/o {
-    match /{allPaths=**} { allow read, write: if false; }
-
-    match /drops/{userId}/{dropId}/{fileName} {
-      // Authenticated owner read (tokenized getDownloadURL links still work for QR phone pickup)
-      allow read: if request.auth != null && request.auth.uid == userId;
-
-      allow create, update: if request.auth != null
-        && request.auth.token.email_verified == true
-        && request.auth.uid == userId
-        && dropId.matches('^[a-zA-Z0-9_\\\\-]{1,128}$')
-        && fileName.size() > 0 && fileName.size() <= 255
-        && request.resource != null
-        && request.resource.size <= 500 * 1024 * 1024;
-
-      allow delete: if request.auth != null
-        && request.auth.token.email_verified == true
-        && request.auth.uid == userId;
-    }
-  }
-}`;
-
-const CORS_JSON_SNIPPET = `[
-  {
-    "origin": [
-      "http://localhost:3000",
-      "https://ntwkkm.github.io",
-      "https://*.web.app",
-      "https://*.firebaseapp.com",
-      "https://*.run.app"
-    ],
-    "method": ["GET", "HEAD", "PUT", "POST", "DELETE", "OPTIONS"],
-    "responseHeader": [
-      "Content-Type",
-      "Content-Length",
-      "Content-Disposition",
-      "Authorization",
-      "X-Goog-Upload-Protocol",
-      "X-Goog-Upload-Command",
-      "X-Goog-Upload-Offset",
-      "X-Goog-Upload-Status",
-      "X-Goog-Upload-URL",
-      "X-Goog-Resumable"
-    ],
-    "maxAgeSeconds": 3600
-  }
-]`;
 
 export function SetupDocsModal({ open, onClose }: SetupDocsModalProps) {
   const [tab, setTab] = useState<DocTab>('firestore');
@@ -117,26 +192,14 @@ export function SetupDocsModal({ open, onClose }: SetupDocsModalProps) {
 
   if (!open) return null;
 
-  const bucketName = firebaseRuntimeConfig?.storageBucket || '<YOUR_BUCKET>.firebasestorage.app';
+  const deploySnippet = `# 1. Deploy Firestore Security Rules (no Cloud Storage bucket or CORS needed)
+firebase deploy --only firestore:rules
 
-  const deploySnippet = `# 1. Apply Storage CORS so direct downloads & Copy Image work without CORS errors
-gcloud storage buckets update gs://${bucketName} --cors-file=cors.json
-# (or legacy: gsutil cors set cors.json gs://${bucketName})
+# 2. Static export to GitHub Pages happens automatically on push to main
+#    (.github/workflows/deploy.yml). Local check:
+GITHUB_PAGES=true npm run build`;
 
-# 2. Deploy Firestore & Storage Security Rules
-firebase deploy --only firestore:rules,storage
-
-# 3. Deploy to Firebase App Hosting (Next.js) or Firebase Hosting
-firebase init apphosting`;
-
-  const activeSnippet =
-    tab === 'firestore'
-      ? FIRESTORE_RULES_SNIPPET
-      : tab === 'storage'
-        ? STORAGE_RULES_SNIPPET
-        : tab === 'cors'
-          ? CORS_JSON_SNIPPET
-          : deploySnippet;
+  const activeSnippet = tab === 'firestore' ? FIRESTORE_RULES_SNIPPET : deploySnippet;
 
   async function handleCopy() {
     const ok = await copyTextToClipboard(activeSnippet);
@@ -167,10 +230,10 @@ firebase init apphosting`;
               id="setup-docs-title"
               className="font-[family-name:var(--font-display)] text-lg font-medium text-[#181715] dark:text-[#F3EFE8]"
             >
-              Firebase Rules, CORS &amp; Deployment Guide
+              Firestore Rules &amp; Deployment Guide
             </h2>
             <p className="text-xs text-[#6B655C] dark:text-[#968F84] mt-0.5">
-              Production configuration included in firestore.rules, storage.rules, cors.json, and DEPLOYMENT_GUIDE.md
+              Firestore-only (Spark plan) configuration in firestore.rules and DEPLOYMENT_GUIDE.md
             </p>
           </div>
           <button
@@ -188,9 +251,7 @@ firebase init apphosting`;
             {(
               [
                 ['firestore', 'firestore.rules'],
-                ['storage', 'storage.rules'],
-                ['cors', 'cors.json'],
-                ['deploy', 'Deploy & Benchmarks'],
+                ['deploy', 'Deploy & Limits'],
               ] as [DocTab, string][]
             ).map(([key, label]) => (
               <button
@@ -233,42 +294,32 @@ firebase init apphosting`;
           {tab === 'deploy' && (
             <div className="space-y-2.5">
               <h3 className="text-sm font-semibold text-[#181715] dark:text-[#F3EFE8]">
-                Large-File Resumable Transfer Benchmarks (100 Mbps Fiber)
+                Firestore-Only File Transfer Limits (Spark plan)
               </h3>
               <div className="overflow-x-auto rounded-lg border border-[#E2DCD0] dark:border-[#272420]">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-[#F2EFE7] dark:bg-[#141311] text-[#5D5850] dark:text-[#A8A196] border-b border-[#E2DCD0] dark:border-[#272420]">
                     <tr>
-                      <th className="py-2.5 px-3.5 font-semibold">Payload Size</th>
-                      <th className="py-2.5 px-3.5 font-semibold">Typical Time</th>
-                      <th className="py-2.5 px-3.5 font-semibold">Peak Browser RAM</th>
-                      <th className="py-2.5 px-3.5 font-semibold">Optimization</th>
+                      <th className="py-2.5 px-3.5 font-semibold">Item</th>
+                      <th className="py-2.5 px-3.5 font-semibold">Value</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#ECE7DD] dark:divide-[#272420] text-[#3D3A35] dark:text-[#CFC8BC] tabular-nums">
                     <tr>
-                      <td className="py-2.5 px-3.5 font-mono">1 MB PNG</td>
-                      <td className="py-2.5 px-3.5">~0.4 s</td>
-                      <td className="py-2.5 px-3.5">&lt; 6 MB</td>
-                      <td className="py-2.5 px-3.5">Direct Blob paste, zero base64 overhead</td>
+                      <td className="py-2.5 px-3.5">Max file size</td>
+                      <td className="py-2.5 px-3.5 font-mono">10 MB (14 chunks × 768 KiB)</td>
                     </tr>
                     <tr>
-                      <td className="py-2.5 px-3.5 font-mono">25 MB PDF</td>
-                      <td className="py-2.5 px-3.5">~2.8 s</td>
-                      <td className="py-2.5 px-3.5">&lt; 12 MB</td>
-                      <td className="py-2.5 px-3.5">HTTP/2 chunked uploadBytesResumable</td>
+                      <td className="py-2.5 px-3.5">Storage format</td>
+                      <td className="py-2.5 px-3.5 font-mono">drops/{'{id}'}/chunks/{'{n}'} · Bytes</td>
                     </tr>
                     <tr>
-                      <td className="py-2.5 px-3.5 font-mono">100 MB Archive</td>
-                      <td className="py-2.5 px-3.5">~9.5 s</td>
-                      <td className="py-2.5 px-3.5">&lt; 16 MB</td>
-                      <td className="py-2.5 px-3.5">Auto-retry chunks on network hiccups</td>
+                      <td className="py-2.5 px-3.5">Image thumbnail</td>
+                      <td className="py-2.5 px-3.5 font-mono">Inline JPEG ≤ 640 px, ≤ 150 KB</td>
                     </tr>
                     <tr>
-                      <td className="py-2.5 px-3.5 font-mono">500 MB Max</td>
-                      <td className="py-2.5 px-3.5">~48 s</td>
-                      <td className="py-2.5 px-3.5">&lt; 20 MB</td>
-                      <td className="py-2.5 px-3.5">Native File slice + throttled progress</td>
+                      <td className="py-2.5 px-3.5">Free quota (per day)</td>
+                      <td className="py-2.5 px-3.5 font-mono">20k writes · 50k reads · 1 GiB stored</td>
                     </tr>
                   </tbody>
                 </table>

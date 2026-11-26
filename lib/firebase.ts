@@ -19,7 +19,6 @@ import {
   getDocFromServer,
   type Firestore,
 } from 'firebase/firestore';
-import { getStorage, type FirebaseStorage } from 'firebase/storage';
 import appletConfig from '../firebase-applet-config.json';
 
 interface FirebaseRuntimeConfig {
@@ -66,7 +65,6 @@ export const isFirebaseConfigured = Boolean(firebaseRuntimeConfig);
 let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
 let auth: Auth | null = null;
-let storage: FirebaseStorage | null = null;
 
 if (firebaseRuntimeConfig) {
   app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseRuntimeConfig);
@@ -74,10 +72,9 @@ if (firebaseRuntimeConfig) {
     ? getFirestore(app, firebaseRuntimeConfig.firestoreDatabaseId)
     : getFirestore(app);
   auth = getAuth(app);
-  storage = getStorage(app);
 }
 
-export { app, db, auth, storage };
+export { app, db, auth };
 
 export enum OperationType {
   CREATE = 'create',

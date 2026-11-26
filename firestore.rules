@@ -28,7 +28,36 @@ service cloud.firestore {
       return resource.data;
     }
 
-    // Pillar 2: Validation Blueprint synchronized verbatim with firebase-blueprint.json
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: /drops/{dropId}
+    // Document ID: 1..128 chars [a-zA-Z0-9_-]
+    // Fields:
+    //   - ownerId: string (required, immutable, == request.auth.uid)
+    //   - type: string (required, 'text' | 'image' | 'file')
+    //   - content: string (required, <= 50000)
+    //   - fileName: string (optional, <= 255)
+    //   - fileSize: number (optional, 0..10485760 [10 MiB])
+    //   - mimeType: string (optional, <= 128)
+    //   - chunkCount: int (optional, 0..14)
+    //   - previewDataUrl: string (optional, <= 160000, JPEG base64 data URL)
+    //   - isCode: bool (optional, mutable by owner)
+    //   - createdAt: timestamp (required, immutable, == request.time on create)
+    //
+    // Subcollection: /drops/{dropId}/chunks/{chunkId}
+    // Document ID: ^[0-9]{1,2}$ matching string(index) ('0'..'13')
+    // Note: Chunks are written before the parent /drops/{dropId} document exists,
+    // so create rules do not require get() of the parent document.
+    // Fields:
+    //   - ownerId: string (required, == request.auth.uid)
+    //   - index: int (required, 0..13)
+    //   - data: bytes (required, size 1..786432 [768 KiB])
+    //
+    // ===============================================================
+
+    // Pillar 2: Validation Blueprint (Firestore-only chunked storage)
     function isValidDrop(data) {
       return data.keys().hasAll(['ownerId', 'type', 'content', 'createdAt'])
         && data.keys().hasOnly([
@@ -38,8 +67,8 @@ service cloud.firestore {
           'fileName',
           'fileSize',
           'mimeType',
-          'downloadUrl',
-          'storagePath',
+          'chunkCount',
+          'previewDataUrl',
           'isCode',
           'createdAt'
         ])
@@ -53,11 +82,28 @@ service cloud.firestore {
         && data.content.size() <= 50000
         && data.createdAt is timestamp
         && (!('fileName' in data) || (data.fileName is string && data.fileName.size() <= 255))
-        && (!('fileSize' in data) || (data.fileSize is number && data.fileSize >= 0 && data.fileSize <= 524288000))
+        && (!('fileSize' in data) || (data.fileSize is number && data.fileSize >= 0 && data.fileSize <= 10485760))
         && (!('mimeType' in data) || (data.mimeType is string && data.mimeType.size() <= 128))
-        && (!('downloadUrl' in data) || (data.downloadUrl is string && data.downloadUrl.size() <= 2048 && data.downloadUrl.matches('^https://.*$')))
-        && (!('storagePath' in data) || (data.storagePath is string && data.storagePath.size() <= 512 && data.storagePath.matches('^drops/' + request.auth.uid + '/.*$')))
+        && (!('chunkCount' in data) || (data.chunkCount is int && data.chunkCount >= 0 && data.chunkCount <= 14))
+        && (!('previewDataUrl' in data) || (data.previewDataUrl is string && data.previewDataUrl.size() <= 160000 && data.previewDataUrl.matches('^data:image/jpeg;base64,[A-Za-z0-9+/=]+$')))
         && (!('isCode' in data) || (data.isCode is bool));
+    }
+
+    function isValidChunk(data, chunkId) {
+      return data.keys().hasAll(['ownerId', 'index', 'data'])
+        && data.keys().hasOnly(['ownerId', 'index', 'data'])
+        && data.ownerId is string
+        && data.ownerId.size() >= 1
+        && data.ownerId.size() <= 128
+        && data.ownerId == request.auth.uid
+        && data.index is int
+        && data.index >= 0
+        && data.index <= 13
+        && chunkId.matches('^[0-9]{1,2}$')
+        && chunkId == string(data.index)
+        && data.data is bytes
+        && data.data.size() >= 1
+        && data.data.size() <= 786432;
     }
 
     // Personal Drop Collection: Private Single-Owner Drops
@@ -90,6 +136,28 @@ service cloud.firestore {
       allow delete: if isVerified()
         && isValidId(dropId)
         && existing().ownerId == request.auth.uid;
+
+      // Chunked Binary Storage Subcollection (written before parent drop doc)
+      match /chunks/{chunkId} {
+        allow get: if isSignedIn()
+          && isValidId(dropId)
+          && chunkId.matches('^[0-9]{1,2}$')
+          && existing().ownerId == request.auth.uid;
+
+        allow list: if isSignedIn()
+          && resource.data.ownerId == request.auth.uid;
+
+        allow create: if isVerified()
+          && isValidId(dropId)
+          && isValidChunk(incoming(), chunkId);
+
+        allow update: if false;
+
+        allow delete: if isVerified()
+          && isValidId(dropId)
+          && chunkId.matches('^[0-9]{1,2}$')
+          && existing().ownerId == request.auth.uid;
+      }
     }
   }
 }

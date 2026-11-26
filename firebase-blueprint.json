@@ -15,7 +15,11 @@
         "type": {
           "type": "string",
           "description": "Category of the dropped item.",
-          "enum": ["text", "image", "file"]
+          "enum": [
+            "text",
+            "image",
+            "file"
+          ]
         },
         "content": {
           "type": "string",
@@ -29,23 +33,25 @@
         },
         "fileSize": {
           "type": "number",
-          "description": "Size of uploaded file in bytes (0 to 500MB)."
+          "description": "Size of uploaded file in bytes (0 to 10 MB).",
+          "maximum": 10485760
         },
         "mimeType": {
           "type": "string",
           "description": "MIME type of the uploaded file or image.",
           "maxLength": 128
         },
-        "downloadUrl": {
-          "type": "string",
-          "description": "HTTPS download URL from Firebase Storage.",
-          "maxLength": 2048,
-          "pattern": "^https://.*$"
+        "chunkCount": {
+          "type": "integer",
+          "description": "Number of Bytes chunk docs under drops/{dropId}/chunks.",
+          "minimum": 0,
+          "maximum": 14
         },
-        "storagePath": {
+        "previewDataUrl": {
           "type": "string",
-          "description": "Firebase Storage object path scoped under drops/{ownerId}/...",
-          "maxLength": 512
+          "description": "Inline JPEG thumbnail data URL for images.",
+          "maxLength": 160000,
+          "pattern": "^data:image/jpeg;base64,[A-Za-z0-9+/=]+$"
         },
         "isCode": {
           "type": "boolean",
@@ -57,7 +63,41 @@
           "description": "Server timestamp set at creation via serverTimestamp()."
         }
       },
-      "required": ["ownerId", "type", "content", "createdAt"]
+      "required": [
+        "ownerId",
+        "type",
+        "content",
+        "createdAt"
+      ]
+    },
+    "DropChunk": {
+      "title": "DropChunk",
+      "description": "Raw file bytes slice (≤ 768 KiB) for a cloud file drop.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owner.",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 13,
+          "description": "Zero-based chunk position; equals the document ID."
+        },
+        "data": {
+          "type": "string",
+          "format": "byte",
+          "description": "Firestore Bytes payload, 1..786432 bytes."
+        }
+      },
+      "required": [
+        "ownerId",
+        "index",
+        "data"
+      ]
     }
   },
   "firestore": {
@@ -65,7 +105,13 @@
       "schema": {
         "$ref": "#/entities/DropItem"
       },
-      "description": "Private per-user drops collection storing text snippets, links, and Firebase Storage file/image metadata."
+      "description": "Private per-user drops collection storing text snippets, links, and file/image metadata (Firestore-only, no Cloud Storage)."
+    },
+    "/drops/{dropId}/chunks/{chunkId}": {
+      "schema": {
+        "$ref": "#/entities/DropChunk"
+      },
+      "description": "Owner-scoped immutable Bytes chunks holding file content."
     }
   }
 }

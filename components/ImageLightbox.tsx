@@ -3,8 +3,12 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { Check, Copy, Download, QrCode, X } from 'lucide-react';
-import { copyImageToClipboard, downloadDropFile } from '@/lib/clipboard-actions';
-import { formatBytes, formatRelativeTime } from '@/lib/drop-utils';
+import {
+  copyImageToClipboard,
+  downloadDropFile,
+  resolveDropBlob,
+} from '@/lib/clipboard-actions';
+import { formatBytes, formatRelativeTime, hasFileData } from '@/lib/drop-utils';
 import type { DropItem } from '@/lib/types';
 
 interface ImageLightboxProps {
@@ -16,6 +20,8 @@ interface ImageLightboxProps {
 export function ImageLightbox({ item, onClose, onOpenQr }: ImageLightboxProps) {
   const [feedback, setFeedback] = useState<{ itemId: string; text: string } | null>(null);
 
+  const [fullImage, setFullImage] = useState<{ itemId: string; url: string } | null>(null);
+
   useEffect(() => {
     if (!item) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -25,17 +31,52 @@ export function ImageLightbox({ item, onClose, onOpenQr }: ImageLightboxProps) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [item, onClose]);
 
-  if (!item || !item.downloadUrl) return null;
+  // Cloud images: show the inline preview immediately, then swap in the full chunked image
+  useEffect(() => {
+    if (!item || item.downloadUrl || typeof item.chunkCount !== 'number') return;
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    resolveDropBlob(item)
+      .then((blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setFullImage({ itemId: item.id, url: objectUrl });
+      })
+      .catch(() => {
+        // Keep showing the preview if chunks cannot be loaded
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [item]);
 
+  if (!item || !hasFileData(item)) return null;
+
+  const imageSrc =
+    item.downloadUrl ??
+    (fullImage && fullImage.itemId === item.id ? fullImage.url : item.previewDataUrl);
   const copyFeedback = feedback && feedback.itemId === item.id ? feedback.text : null;
 
   async function handleCopyImage() {
-    if (!item?.downloadUrl) return;
-    const result = await copyImageToClipboard(item.downloadUrl);
+    if (!item) return;
+    const result = await copyImageToClipboard(item);
     setFeedback({ itemId: item.id, text: result.message });
     setTimeout(() => {
       setFeedback((prev) => (prev?.itemId === item.id ? null : prev));
     }, 2000);
+  }
+
+  async function handleDownload() {
+    if (!item) return;
+    try {
+      await downloadDropFile(item);
+    } catch {
+      setFeedback({ itemId: item.id, text: 'Download failed' });
+      setTimeout(() => {
+        setFeedback((prev) => (prev?.itemId === item.id ? null : prev));
+      }, 2400);
+    }
   }
 
   return (
@@ -81,7 +122,7 @@ export function ImageLightbox({ item, onClose, onOpenQr }: ImageLightboxProps) {
 
           <button
             type="button"
-            onClick={() => downloadDropFile(item)}
+            onClick={handleDownload}
             className="h-9 px-3.5 rounded-lg bg-[#F3EFE8] text-[#121110] text-xs sm:text-sm font-medium hover:bg-[#E2DBD0] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
           >
             <Download className="w-4 h-4" />
@@ -113,7 +154,7 @@ export function ImageLightbox({ item, onClose, onOpenQr }: ImageLightboxProps) {
         onClick={onClose}
       >
         <img
-          src={item.downloadUrl}
+          src={imageSrc}
           alt={item.fileName || 'Full size preview'}
           referrerPolicy="no-referrer"
           className="max-h-full max-w-full object-contain rounded-lg border border-[#2C2925] shadow-2xl"

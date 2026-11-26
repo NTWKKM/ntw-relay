@@ -273,7 +273,7 @@ export function DropComposer({
               {isDragging ? 'Release to transfer' : 'Drop files or images'}
             </p>
             <p className="text-xs text-[#6B655C] dark:text-[#968F84] leading-relaxed max-w-[220px]">
-              Multi-file handoff up to 500 MB · Paste screenshots anywhere
+              Multi-file handoff up to 10 MB · Paste screenshots anywhere
             </p>
           </div>
 

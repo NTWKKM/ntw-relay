@@ -2,6 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildAppShareUrl,
+  CHUNK_SIZE_BYTES,
+  hasFileData,
+  MAX_CHUNK_COUNT,
+  MAX_FILE_SIZE_BYTES,
+  splitIntoChunkRanges,
   filterDrops,
   formatBytes,
   formatRelativeTime,
@@ -194,4 +199,48 @@ test('buildAppShareUrl appends subpath basePath cleanly for GitHub Pages QR', ()
     buildAppShareUrl('https://ntwkkm.github.io/', 'ntw-relay/'),
     'https://ntwkkm.github.io/ntw-relay/'
   );
+});
+
+test('splitIntoChunkRanges covers every byte exactly once within the Firestore chunk cap', () => {
+  assert.deepEqual(splitIntoChunkRanges(0), []);
+  assert.deepEqual(splitIntoChunkRanges(-5), []);
+  assert.deepEqual(splitIntoChunkRanges(10, 4), [
+    { index: 0, start: 0, end: 4 },
+    { index: 1, start: 4, end: 8 },
+    { index: 2, start: 8, end: 10 },
+  ]);
+  assert.deepEqual(splitIntoChunkRanges(CHUNK_SIZE_BYTES), [
+    { index: 0, start: 0, end: CHUNK_SIZE_BYTES },
+  ]);
+  const maxRanges = splitIntoChunkRanges(MAX_FILE_SIZE_BYTES);
+  assert.equal(maxRanges.length, MAX_CHUNK_COUNT);
+  assert.equal(MAX_CHUNK_COUNT, 14);
+  assert.equal(maxRanges[maxRanges.length - 1].end, MAX_FILE_SIZE_BYTES);
+  assert.ok(maxRanges.every((r) => r.end - r.start <= CHUNK_SIZE_BYTES && r.end > r.start));
+  assert.throws(() => splitIntoChunkRanges(10, 0));
+});
+
+test('Firestore-chunked files are downloadable and QR points to the app instead of a public URL', () => {
+  const now = Date.now();
+  const chunked: DropItem = {
+    id: 'f3',
+    ownerId: 'u',
+    type: 'file',
+    content: 'report.pdf',
+    fileName: 'report.pdf',
+    chunkCount: 3,
+    createdAtMs: now,
+  };
+  assert.equal(hasFileData(chunked), true);
+  assert.equal(hasFileData({ ...chunked, chunkCount: 0 }), true);
+  assert.equal(hasFileData({ ...chunked, chunkCount: undefined }), false);
+
+  const withApp = getQrPayload(chunked, 'https://ntwkkm.github.io/ntw-relay/');
+  assert.equal(withApp.value, 'https://ntwkkm.github.io/ntw-relay/');
+  assert.match(withApp.label, /sign in to download report\.pdf/);
+
+  const noApp = getQrPayload(chunked);
+  assert.equal(noApp.value, null);
+  assert.ok(noApp.unavailableReason);
+  assert.equal(getQrPayload(chunked, 'javascript:alert(1)').value, null);
 });

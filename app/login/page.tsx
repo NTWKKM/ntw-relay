@@ -24,7 +24,7 @@ const CAPABILITY_LEDGER = [
   {
     index: '02',
     title: 'Resumable File Handoff',
-    detail: 'Transfer documents, archives, and Thai UTF-8 filenames up to 500 MB with live speed.',
+    detail: 'Transfer documents, archives, and Thai UTF-8 filenames up to 10 MB, stored entirely in Firestore.',
   },
   {
     index: '03',

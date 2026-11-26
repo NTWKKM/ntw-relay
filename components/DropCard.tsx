@@ -25,6 +25,7 @@ import {
 import {
   formatBytes,
   formatRelativeTime,
+  hasFileData,
   looksLikeCode,
   parseTextSegments,
 } from '@/lib/drop-utils';
@@ -65,12 +66,15 @@ export function DropCard({
   onOpenImage,
 }: DropCardProps) {
   const [copiedLabel, setCopiedLabel] = useState<string | null>(null);
+  const [downloadLabel, setDownloadLabel] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [imgBroken, setImgBroken] = useState(false);
 
   const isCode = item.isCode ?? looksLikeCode(item.content);
   const itemDescriptor = item.fileName || item.content.slice(0, 32) || item.id;
   const lineCount = item.type === 'text' ? item.content.split('\n').length : 0;
+  const canDownload = hasFileData(item);
+  const imageSrc = item.downloadUrl ?? item.previewDataUrl;
 
   async function handleCopyText() {
     const ok = await copyTextToClipboard(item.content);
@@ -81,10 +85,22 @@ export function DropCard({
   }
 
   async function handleCopyImage() {
-    if (!item.downloadUrl) return;
-    const result = await copyImageToClipboard(item.downloadUrl);
+    if (!canDownload) return;
+    const result = await copyImageToClipboard(item);
     setCopiedLabel(result.message);
     setTimeout(() => setCopiedLabel(null), 2000);
+  }
+
+  async function handleDownload() {
+    if (!canDownload || downloadLabel) return;
+    setDownloadLabel('Loading…');
+    try {
+      await downloadDropFile(item);
+      setDownloadLabel(null);
+    } catch {
+      setDownloadLabel('Failed');
+      setTimeout(() => setDownloadLabel(null), 2400);
+    }
   }
 
   async function handleDelete() {
@@ -174,7 +190,7 @@ export function DropCard({
             </>
           )}
 
-          {item.type === 'image' && item.downloadUrl && (
+          {item.type === 'image' && canDownload && (
             <>
               <button
                 type="button"
@@ -194,25 +210,25 @@ export function DropCard({
 
               <button
                 type="button"
-                onClick={() => downloadDropFile(item)}
+                onClick={handleDownload}
                 aria-label={`Download image "${itemDescriptor}"`}
                 className="h-10 sm:h-8 px-2.5 rounded-lg text-xs font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#F1EDE4] dark:hover:bg-[#25221E] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
               >
                 <Download className="w-3.5 h-3.5" aria-hidden="true" />
-                <span className="hidden sm:inline">Download</span>
+                <span className="hidden sm:inline">{downloadLabel || 'Download'}</span>
               </button>
             </>
           )}
 
-          {item.type === 'file' && item.downloadUrl && (
+          {item.type === 'file' && canDownload && (
             <button
               type="button"
-              onClick={() => downloadDropFile(item)}
+              onClick={handleDownload}
               aria-label={`Download file "${itemDescriptor}"`}
               className="h-10 sm:h-8 px-3 rounded-lg bg-[#F5F2EB] dark:bg-[#22201C] border border-[#E2DCD0] dark:border-[#322E28] text-xs font-medium text-[#181715] dark:text-[#F3EFE8] hover:border-[#C5BDB0] dark:hover:border-[#4A453E] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             >
               <Download className="w-3.5 h-3.5" aria-hidden="true" />
-              <span>Download</span>
+              <span>{downloadLabel || 'Download'}</span>
             </button>
           )}
 
@@ -275,7 +291,7 @@ export function DropCard({
 
       {item.type === 'image' && (
         <div className="space-y-2.5">
-          {item.downloadUrl && !imgBroken ? (
+          {imageSrc && !imgBroken ? (
             <button
               type="button"
               onClick={() => onOpenImage(item)}
@@ -283,7 +299,7 @@ export function DropCard({
               className="group/img relative inline-block max-w-full rounded-lg overflow-hidden border border-[#E2DCD0] dark:border-[#2C2925] bg-[#F2EFE7] dark:bg-[#131210] text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1D4ED8]"
             >
               <img
-                src={item.downloadUrl}
+                src={imageSrc}
                 alt={item.fileName || 'Dropped image preview'}
                 referrerPolicy="no-referrer"
                 onError={() => setImgBroken(true)}

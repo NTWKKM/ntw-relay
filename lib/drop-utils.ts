@@ -2,7 +2,41 @@ import type { CleanupRange, DropItem, FilterTab } from './types';
 
 export const MAX_TEXT_LENGTH = 50000;
 export const MAX_FILENAME_LENGTH = 255;
-export const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024; // 500 MB
+/** Firestore-only (Spark plan) file cap. Keep in sync with firestore.rules (fileSize / chunkCount). */
+export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+/** Raw bytes per Firestore chunk document (Firestore hard limit is 1 MiB per document). */
+export const CHUNK_SIZE_BYTES = 768 * 1024; // 768 KiB
+export const MAX_CHUNK_COUNT = Math.ceil(MAX_FILE_SIZE_BYTES / CHUNK_SIZE_BYTES); // 14
+
+export interface ChunkRange {
+  index: number;
+  start: number;
+  end: number;
+}
+
+/**
+ * Splits a byte length into contiguous [start, end) ranges of at most `chunkSize` bytes.
+ * A zero-byte file yields no chunks.
+ */
+export function splitIntoChunkRanges(
+  totalBytes: number,
+  chunkSize: number = CHUNK_SIZE_BYTES
+): ChunkRange[] {
+  if (!Number.isFinite(totalBytes) || totalBytes <= 0) return [];
+  if (!Number.isFinite(chunkSize) || chunkSize <= 0) {
+    throw new Error('chunkSize must be a positive number.');
+  }
+  const ranges: ChunkRange[] = [];
+  for (let start = 0, index = 0; start < totalBytes; start += chunkSize, index += 1) {
+    ranges.push({ index, start, end: Math.min(start + chunkSize, totalBytes) });
+  }
+  return ranges;
+}
+
+/** True when a drop carries downloadable file bytes (local data URL or Firestore chunks). */
+export function hasFileData(item: DropItem): boolean {
+  return Boolean(item.downloadUrl) || typeof item.chunkCount === 'number';
+}
 
 export interface TextSegment {
   type: 'text' | 'url';
@@ -248,7 +282,10 @@ export function getOldDropIds(
 /**
  * Determines the primary QR payload for any drop card.
  */
-export function getQrPayload(item: DropItem): {
+export function getQrPayload(
+  item: DropItem,
+  appUrl: string = ''
+): {
   value: string | null;
   label: string;
   unavailableReason?: string;
@@ -272,6 +309,23 @@ export function getQrPayload(item: DropItem): {
     return {
       value: item.downloadUrl,
       label: item.fileName ? `Direct download · ${item.fileName}` : 'Direct download link',
+    };
+  }
+
+  // Firestore-chunked files have no public URL: send the phone to the app (sign-in required)
+  if (typeof item.chunkCount === 'number' && !item.isLocalOnly) {
+    if (appUrl && isSafeHttpUrl(appUrl)) {
+      return {
+        value: appUrl,
+        label: item.fileName
+          ? `Open NTW Relay · sign in to download ${item.fileName}`
+          : 'Open NTW Relay · sign in to download',
+      };
+    }
+    return {
+      value: null,
+      label: item.fileName ?? 'Cloud file',
+      unavailableReason: 'Open NTW Relay on your phone and sign in to download this file.',
     };
   }
 

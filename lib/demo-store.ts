@@ -28,30 +28,30 @@ function createDemoScreenshotDataUrl(): string {
     <text x="72" y="330" fill="#5D5850" font-family="ui-sans-serif, system-ui, sans-serif" font-size="15">Firestore onSnapshot</text>
 
     <rect x="48" y="376" width="264" height="58" rx="8" fill="#FCFBF8" stroke="#DDD6C8"/>
-    <text x="72" y="410" fill="#5D5850" font-family="ui-sans-serif, system-ui, sans-serif" font-size="15">Storage Resumable Upload</text>
+    <text x="72" y="410" fill="#5D5850" font-family="ui-sans-serif, system-ui, sans-serif" font-size="15">Firestore Bytes Chunks</text>
 
     <rect x="424" y="140" width="224" height="132" rx="10" fill="#FCFBF8" stroke="#1D4ED8" stroke-width="1.5"/>
     <text x="450" y="186" fill="#181715" font-family="Georgia, serif" font-size="21" font-weight="600">Workstation</text>
     <text x="450" y="218" fill="#1D4ED8" font-family="ui-monospace, monospace" font-size="14">Cmd+V Screenshot</text>
-    <text x="450" y="244" fill="#787268" font-family="ui-monospace, monospace" font-size="13">uploadBytesResumable()</text>
+    <text x="450" y="244" fill="#787268" font-family="ui-monospace, monospace" font-size="13">768 KiB chunks → setDoc()</text>
 
     <line x1="648" y1="206" x2="732" y2="206" stroke="#1D4ED8" stroke-width="2" stroke-dasharray="6 5"/>
 
     <rect x="732" y="140" width="232" height="132" rx="10" fill="#FCFBF8" stroke="#D2C9B8" stroke-width="1.5"/>
     <text x="758" y="186" fill="#181715" font-family="Georgia, serif" font-size="21" font-weight="600">Firebase Vault</text>
-    <text x="758" y="218" fill="#5D5850" font-family="ui-monospace, monospace" font-size="14">Firestore + Storage</text>
+    <text x="758" y="218" fill="#5D5850" font-family="ui-monospace, monospace" font-size="14">Firestore Only</text>
     <text x="758" y="244" fill="#15803D" font-family="ui-monospace, monospace" font-size="13">Owner-Isolated Rules</text>
 
     <line x1="848" y1="272" x2="848" y2="386" stroke="#181715" stroke-width="1.75"/>
 
     <rect x="656" y="386" width="384" height="142" rx="10" fill="#FCFBF8" stroke="#D2C9B8" stroke-width="1.5"/>
     <text x="686" y="434" fill="#181715" font-family="Georgia, serif" font-size="21" font-weight="600">Phone Pickup via QR</text>
-    <text x="686" y="466" fill="#5D5850" font-family="ui-sans-serif, system-ui, sans-serif" font-size="15">Scan card QR for instant direct download</text>
-    <text x="686" y="498" fill="#1D4ED8" font-family="ui-monospace, monospace" font-size="14">getDownloadURL() -&gt; QRCodeSVG</text>
+    <text x="686" y="466" fill="#5D5850" font-family="ui-sans-serif, system-ui, sans-serif" font-size="15">Scan QR to open the app, sign in, download</text>
+    <text x="686" y="498" fill="#1D4ED8" font-family="ui-monospace, monospace" font-size="14">chunks → Blob → Download</text>
 
     <rect x="424" y="576" width="712" height="106" rx="10" fill="#EFECE4" stroke="#DDD6C8"/>
-    <text x="454" y="618" fill="#181715" font-family="ui-monospace, monospace" font-size="15">gcloud storage buckets update gs://your-bucket --cors-file=cors.json</text>
-    <text x="454" y="652" fill="#5D5850" font-family="ui-sans-serif, system-ui, sans-serif" font-size="14">Direct file downloads &amp; Copy Image verified across desktop and mobile</text>
+    <text x="454" y="618" fill="#181715" font-family="ui-monospace, monospace" font-size="15">firebase deploy --only firestore:rules</text>
+    <text x="454" y="652" fill="#5D5850" font-family="ui-sans-serif, system-ui, sans-serif" font-size="14">Free Spark plan · no Cloud Storage bucket or CORS setup required</text>
   </svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
@@ -66,7 +66,7 @@ export function createInitialDemoItems(nowMs: number = Date.now()): DropItem[] {
       ownerId: 'local_demo',
       type: 'text',
       content:
-        'ลิงก์เอกสารตั้งค่า Firebase Storage CORS และเอกสารอ้างอิงสำหรับ NTW Relay: https://firebase.google.com/docs/storage/web/download-files',
+        'เอกสารอ้างอิง Firestore Security Rules สำหรับ NTW Relay: https://firebase.google.com/docs/firestore/security/get-started',
       isCode: false,
       createdAtMs: nowMs - 4 * min,
       isLocalOnly: true,
@@ -87,7 +87,7 @@ export function createInitialDemoItems(nowMs: number = Date.now()): DropItem[] {
       id: 'drop_demo_code_3',
       ownerId: 'local_demo',
       type: 'text',
-      content: `gcloud storage buckets update gs://<BUCKET_NAME> --cors-file=cors.json\nfirebase deploy --only firestore:rules,storage`,
+      content: `firebase deploy --only firestore:rules`,
       isCode: true,
       createdAtMs: nowMs - 2 * hour,
       isLocalOnly: true,

@@ -268,7 +268,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
             const message =
               err instanceof Error
                 ? err.message
-                : 'Upload failed. Check Storage Rules and CORS configuration.';
+                : 'Upload failed. Check Firestore rules and your connection.';
             setUploads((prev) =>
               prev.map((t) =>
                 t.id === taskId ? { ...t, status: 'error', errorMessage: message } : t
@@ -389,7 +389,11 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
   }
 
   function handleOpenItemQr(item: DropItem) {
-    const payload = getQrPayload(item);
+    const appUrl =
+      typeof window !== 'undefined'
+        ? buildAppShareUrl(window.location.origin, process.env.NEXT_PUBLIC_BASE_PATH || '')
+        : '';
+    const payload = getQrPayload(item, appUrl);
     setQrModal({
       title: 'Quick Share QR',
       subtitle: payload.label,
