@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "node --import jiti/register --test lib/drop-utils.test.ts firestore.rules.test.ts",
-    "clean": "next clean"
+    "clean": "node -e \"const fs=require('fs'); for (const d of ['.next','out']) fs.rmSync(d,{recursive:true,force:true});\""
   },
   "dependencies": {
     "@firebase/eslint-plugin-security-rules": "^0.0.2",

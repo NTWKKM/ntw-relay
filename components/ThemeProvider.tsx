@@ -25,6 +25,7 @@ export function useMaterialTheme(): ThemeContextValue {
 }
 
 const themeListeners = new Set<() => void>();
+let memoryTheme: MaterialTheme | null = null;
 
 function notifyThemeListeners() {
   themeListeners.forEach((listener) => listener());
@@ -33,7 +34,14 @@ function notifyThemeListeners() {
 function subscribeTheme(onStoreChange: () => void) {
   themeListeners.add(onStoreChange);
   const onStorage = (e: StorageEvent) => {
-    if (e.key === THEME_STORAGE_KEY) onStoreChange();
+    if (e.key === THEME_STORAGE_KEY || e.key === null) {
+      try {
+        memoryTheme = resolveStoredTheme(window.localStorage.getItem(THEME_STORAGE_KEY));
+      } catch {
+        // Preserve memoryTheme fallback when storage access fails
+      }
+      onStoreChange();
+    }
   };
   if (typeof window !== 'undefined') {
     window.addEventListener('storage', onStorage);
@@ -48,6 +56,7 @@ function subscribeTheme(onStoreChange: () => void) {
 
 function getClientThemeSnapshot(): MaterialTheme {
   if (typeof window === 'undefined') return 'light';
+  if (memoryTheme !== null) return memoryTheme;
   try {
     return resolveStoredTheme(window.localStorage.getItem(THEME_STORAGE_KEY));
   } catch {
@@ -83,6 +92,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [theme]);
 
   const setTheme = useCallback((next: MaterialTheme) => {
+    memoryTheme = next;
     try {
       window.localStorage.setItem(THEME_STORAGE_KEY, next);
     } catch {

@@ -18,7 +18,9 @@ import {
   isSafeHttpUrl,
   looksLikeCode,
   parseTextSegments,
+  QR_MAX_TEXT_BYTES,
   sanitizeFileName,
+  truncateToUtf8Bytes,
   validateDropContent,
 } from './drop-utils';
 import { mapFirebaseAuthError, validateEmailAuthInput } from './auth-errors';
@@ -193,12 +195,14 @@ test('material theme resolution defaults to Atelier Paper light and toggles clea
 
 test('buildAppShareUrl appends subpath basePath cleanly for GitHub Pages QR', () => {
   assert.equal(buildAppShareUrl('http://localhost:3000', ''), 'http://localhost:3000');
+  assert.equal(buildAppShareUrl('http://localhost:3000', '   '), 'http://localhost:3000');
+  assert.equal(buildAppShareUrl('http://localhost:3000', ' / '), 'http://localhost:3000');
   assert.equal(
     buildAppShareUrl('https://ntwkkm.github.io', '/ntw-relay'),
     'https://ntwkkm.github.io/ntw-relay/'
   );
   assert.equal(
-    buildAppShareUrl('https://ntwkkm.github.io/', 'ntw-relay/'),
+    buildAppShareUrl('https://ntwkkm.github.io/', ' ntw-relay/ '),
     'https://ntwkkm.github.io/ntw-relay/'
   );
 });
@@ -260,5 +264,28 @@ test('isImeComposing guards against premature IME submission', () => {
   assert.equal(isImeComposing({ isComposing: true, keyCode: 13 }), true);
   assert.equal(isImeComposing({ isComposing: false, keyCode: 229 }), true);
   assert.equal(isImeComposing({ isComposing: false, keyCode: 13 }), false);
+});
+
+test('getQrPayload caps text by UTF-8 byte length on code-point boundaries (Thai & emoji)', () => {
+  const encoder = new TextEncoder();
+  // Each Thai char is 3 UTF-8 bytes: 500 chars = 1,500 bytes (> 1,000 bytes, < 1,200 chars)
+  const thaiLong = 'ก'.repeat(500);
+  const thaiQr = getQrPayload({
+    id: 't1',
+    ownerId: 'u',
+    type: 'text',
+    content: thaiLong,
+    createdAtMs: Date.now(),
+  });
+  assert.ok(thaiQr.value);
+  assert.ok(encoder.encode(thaiQr.value).length <= QR_MAX_TEXT_BYTES);
+  assert.equal(thaiQr.value.length, Math.floor(QR_MAX_TEXT_BYTES / 3));
+  assert.match(thaiQr.label, /bytes/);
+
+  // 4-byte emoji should never be split across surrogate pairs
+  const emojiTruncated = truncateToUtf8Bytes('😀'.repeat(10), 10);
+  assert.equal(emojiTruncated.truncated, true);
+  assert.equal(emojiTruncated.value, '😀😀');
+  assert.equal(encoder.encode(emojiTruncated.value).length, 8);
 });
 

@@ -32,8 +32,56 @@ import type { DropItem } from './types';
 const DROPS_COLLECTION = 'drops';
 const CHUNKS_SUBCOLLECTION = 'chunks';
 
-/** In-memory cache of reassembled file Blobs keyed by dropId (avoids re-reading chunks). */
-const blobCache = new Map<string, Promise<Blob>>();
+const MAX_BLOB_CACHE_BYTES = 50 * 1024 * 1024; // 50 MB total LRU budget
+const MAX_BLOB_CACHE_ENTRIES = 20;
+
+interface BlobCacheEntry {
+  promise: Promise<Blob>;
+  size: number;
+}
+
+/** Bounded LRU in-memory cache of reassembled file Blobs keyed by dropId. */
+const blobCache = new Map<string, BlobCacheEntry>();
+let blobCacheTotalBytes = 0;
+
+function deleteBlobCacheEntry(dropId: string) {
+  const existing = blobCache.get(dropId);
+  if (!existing) return;
+  blobCacheTotalBytes = Math.max(0, blobCacheTotalBytes - existing.size);
+  blobCache.delete(dropId);
+}
+
+function evictBlobCacheIfNeeded(keepDropId: string) {
+  for (const key of blobCache.keys()) {
+    if (blobCache.size <= MAX_BLOB_CACHE_ENTRIES && blobCacheTotalBytes <= MAX_BLOB_CACHE_BYTES) {
+      break;
+    }
+    if (key === keepDropId) continue;
+    deleteBlobCacheEntry(key);
+  }
+}
+
+function setBlobCacheEntry(dropId: string, promise: Promise<Blob>, estimatedSize: number) {
+  deleteBlobCacheEntry(dropId);
+  const safeSize = Math.max(0, estimatedSize);
+  const entry: BlobCacheEntry = { promise, size: safeSize };
+  blobCache.set(dropId, entry);
+  blobCacheTotalBytes += safeSize;
+  evictBlobCacheIfNeeded(dropId);
+
+  promise
+    .then((blob) => {
+      if (blobCache.get(dropId) !== entry) return;
+      blobCacheTotalBytes = Math.max(0, blobCacheTotalBytes - entry.size + blob.size);
+      entry.size = blob.size;
+      evictBlobCacheIfNeeded(dropId);
+    })
+    .catch(() => {
+      if (blobCache.get(dropId) === entry) {
+        deleteBlobCacheEntry(dropId);
+      }
+    });
+}
 
 export function subscribeToUserDrops(
   userId: string,
@@ -159,12 +207,13 @@ export async function uploadCloudFileDrop(
     for (const { index, start, end } of ranges) {
       const bytes = new Uint8Array(await file.slice(start, end).arrayBuffer());
       const chunkId = String(index);
+      // Record before awaiting so cleanup can remove chunks that committed before a local error
+      writtenChunkIds.push(chunkId);
       await setDoc(doc(firestore, DROPS_COLLECTION, dropId, CHUNKS_SUBCOLLECTION, chunkId), {
         ownerId: userId,
         index,
         data: Bytes.fromUint8Array(bytes),
       });
-      writtenChunkIds.push(chunkId);
       reportProgress(end);
     }
 
@@ -180,7 +229,7 @@ export async function uploadCloudFileDrop(
       ...(previewDataUrl ? { previewDataUrl } : {}),
       createdAt: serverTimestamp(),
     });
-    blobCache.set(dropId, Promise.resolve(file));
+    setBlobCacheEntry(dropId, Promise.resolve(file), file.size);
     return dropId;
   } catch (error) {
     // Best-effort cleanup of chunks that were written before the failure
@@ -198,7 +247,12 @@ export async function uploadCloudFileDrop(
  */
 export function fetchCloudDropBlob(item: DropItem): Promise<Blob> {
   const cached = blobCache.get(item.id);
-  if (cached) return cached;
+  if (cached) {
+    // Refresh LRU recency
+    blobCache.delete(item.id);
+    blobCache.set(item.id, cached);
+    return cached.promise;
+  }
 
   const pending = (async () => {
     const firestore = db;
@@ -241,8 +295,7 @@ export function fetchCloudDropBlob(item: DropItem): Promise<Blob> {
     );
   })();
 
-  blobCache.set(item.id, pending);
-  pending.catch(() => blobCache.delete(item.id));
+  setBlobCacheEntry(item.id, pending, item.fileSize ?? 0);
   return pending;
 }
 
@@ -275,7 +328,7 @@ export async function deleteCloudDrop(item: DropItem): Promise<void> {
     }
     batch.delete(doc(firestore, DROPS_COLLECTION, item.id));
     await batch.commit();
-    blobCache.delete(item.id);
+    deleteBlobCacheEntry(item.id);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }

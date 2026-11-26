@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Check, Copy, Download, QrCode, X } from 'lucide-react';
+import { AlertCircle, Check, Copy, Download, QrCode, X } from 'lucide-react';
 import { ModalDialog } from './ModalDialog';
 import {
   copyImageToClipboard,
@@ -18,53 +18,103 @@ interface ImageLightboxProps {
 }
 
 export function ImageLightbox({ item, onClose, onOpenQr }: ImageLightboxProps) {
-  const [feedback, setFeedback] = useState<{ itemId: string; text: string } | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<{
+    itemId: string;
+    text: string;
+    ok: boolean;
+  } | null>(null);
+  const [downloadError, setDownloadError] = useState<{ itemId: string; text: string } | null>(null);
   const [fullImage, setFullImage] = useState<{ itemId: string; url: string } | null>(null);
+
+  const itemId = item?.id ?? null;
+  const itemOwnerId = item?.ownerId ?? '';
+  const itemType = item?.type ?? 'image';
+  const itemContent = item?.content ?? '';
+  const itemMimeType = item?.mimeType;
+  const itemFileSize = item?.fileSize;
+  const itemIsLocalOnly = item?.isLocalOnly;
+  const itemCreatedAtMs = item?.createdAtMs ?? 0;
+  const itemDownloadUrl = item?.downloadUrl;
+  const itemChunkCount = item?.chunkCount;
 
   // Cloud images: display inline preview immediately, then swap in full chunked image
   useEffect(() => {
-    if (!item || item.downloadUrl || typeof item.chunkCount !== 'number') return;
+    if (!itemId || itemDownloadUrl || typeof itemChunkCount !== 'number') return;
     let cancelled = false;
     let objectUrl: string | null = null;
-    resolveDropBlob(item)
+    const blobTarget: DropItem = {
+      id: itemId,
+      ownerId: itemOwnerId,
+      type: itemType,
+      content: itemContent,
+      mimeType: itemMimeType,
+      fileSize: itemFileSize,
+      chunkCount: itemChunkCount,
+      isLocalOnly: itemIsLocalOnly,
+      createdAtMs: itemCreatedAtMs,
+    };
+    resolveDropBlob(blobTarget)
       .then((blob) => {
         if (cancelled) return;
         objectUrl = URL.createObjectURL(blob);
-        setFullImage({ itemId: item.id, url: objectUrl });
+        setFullImage({ itemId, url: objectUrl });
       })
       .catch(() => {
         // Keep preview if chunks fail to load
       });
     return () => {
       cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      if (objectUrl) {
+        const revoked = objectUrl;
+        URL.revokeObjectURL(revoked);
+        setFullImage((prev) => (prev?.url === revoked ? null : prev));
+      }
     };
-  }, [item]);
+  }, [
+    itemId,
+    itemOwnerId,
+    itemType,
+    itemContent,
+    itemMimeType,
+    itemFileSize,
+    itemChunkCount,
+    itemIsLocalOnly,
+    itemCreatedAtMs,
+    itemDownloadUrl,
+  ]);
 
   const isOpen = Boolean(item && hasFileData(item));
   const imageSrc = item
     ? item.downloadUrl ??
       (fullImage && fullImage.itemId === item.id ? fullImage.url : item.previewDataUrl)
     : undefined;
-  const copyFeedback = item && feedback && feedback.itemId === item.id ? feedback.text : null;
+  const activeCopyFeedback =
+    item && copyFeedback && copyFeedback.itemId === item.id ? copyFeedback : null;
+  const activeDownloadError =
+    item && downloadError && downloadError.itemId === item.id ? downloadError.text : null;
 
   async function handleCopyImage() {
     if (!item) return;
     const result = await copyImageToClipboard(item);
-    setFeedback({ itemId: item.id, text: result.message });
+    setCopyFeedback({
+      itemId: item.id,
+      text: result.message,
+      ok: result.mode === 'image',
+    });
     setTimeout(() => {
-      setFeedback((prev) => (prev?.itemId === item.id ? null : prev));
+      setCopyFeedback((prev) => (prev?.itemId === item.id ? null : prev));
     }, 2000);
   }
 
   async function handleDownload() {
     if (!item) return;
+    setDownloadError(null);
     try {
       await downloadDropFile(item);
     } catch {
-      setFeedback({ itemId: item.id, text: 'Failed' });
+      setDownloadError({ itemId: item.id, text: 'Failed' });
       setTimeout(() => {
-        setFeedback((prev) => (prev?.itemId === item.id ? null : prev));
+        setDownloadError((prev) => (prev?.itemId === item.id ? null : prev));
       }, 2400);
     }
   }
@@ -103,12 +153,16 @@ export function ImageLightbox({ item, onClose, onOpenQr }: ImageLightboxProps) {
                 onClick={handleCopyImage}
                 className="h-9 px-3 rounded-lg bg-[#1E1C1A] border border-[#322E28] text-xs sm:text-sm font-medium text-[#F3EFE8] hover:bg-[#2A2723] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
               >
-                {copyFeedback ? (
-                  <Check className="w-4 h-4 text-[#4ADE80]" aria-hidden="true" />
+                {activeCopyFeedback ? (
+                  activeCopyFeedback.ok ? (
+                    <Check className="w-4 h-4 text-[#4ADE80]" aria-hidden="true" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-[#F87171]" aria-hidden="true" />
+                  )
                 ) : (
                   <Copy className="w-4 h-4" aria-hidden="true" />
                 )}
-                <span>{copyFeedback || 'Copy'}</span>
+                <span>{activeCopyFeedback ? activeCopyFeedback.text : 'Copy'}</span>
               </button>
 
               <button
@@ -116,8 +170,14 @@ export function ImageLightbox({ item, onClose, onOpenQr }: ImageLightboxProps) {
                 onClick={handleDownload}
                 className="h-9 px-3 rounded-lg bg-[#F3EFE8] text-[#121110] text-xs sm:text-sm font-medium hover:bg-[#E2DBD0] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
               >
-                <Download className="w-4 h-4" aria-hidden="true" />
-                <span className="hidden sm:inline">Download</span>
+                {activeDownloadError ? (
+                  <AlertCircle className="w-4 h-4 text-[#B91C1C]" aria-hidden="true" />
+                ) : (
+                  <Download className="w-4 h-4" aria-hidden="true" />
+                )}
+                <span className={activeDownloadError ? 'text-[#B91C1C]' : 'hidden sm:inline'}>
+                  {activeDownloadError || 'Download'}
+                </span>
               </button>
 
               <button
