@@ -165,10 +165,10 @@ service cloud.firestore {
 
     // Personal Drop Collection: Private Single-Owner Drops
     match /drops/{dropId} {
-      // Single-document read: strict owner isolation + Path ID hardening
+      // Single-document read: strict owner isolation + Path ID hardening (allows missing-doc get for idempotent deletes)
       allow get: if isSignedIn()
         && isValidId(dropId)
-        && existing().ownerId == request.auth.uid;
+        && (resource == null || existing().ownerId == request.auth.uid);
 
       // Pillar 8: Secure List Query (no isValidId, no get(), strict rule-side owner filter)
       allow list: if isSignedIn()

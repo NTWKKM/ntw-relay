@@ -160,6 +160,20 @@ test('owner may toggle isCode but not the counted marker', async () => {
   await assertFails(updateDoc(doc(db, 'drops', 'drop_t'), { counted: false }));
 });
 
+test('signed-in get on a missing drop returns non-existent; unauthenticated and cross-tenant gets are denied', async () => {
+  const db = ownerDb();
+  await assertSucceeds(atomicCreate(db, 'drop_existing_1', textDrop('secret'), 6, false));
+
+  const missingSnap = await assertSucceeds(getDoc(doc(db, 'drops', 'drop_missing_1')));
+  if (missingSnap.exists()) throw new Error('expected missing drop snapshot to have exists() === false');
+
+  const unauthDb = env.unauthenticatedContext().firestore() as unknown as Firestore;
+  await assertFails(getDoc(doc(unauthDb, 'drops', 'drop_missing_1')));
+
+  const otherDb = env.authenticatedContext('user_beta_2', { email_verified: true }).firestore() as unknown as Firestore;
+  await assertFails(getDoc(doc(otherDb, 'drops', 'drop_existing_1')));
+});
+
 // ---------------------------------------------------------------------------
 // Admin SDK /stats/storage backfill (lib/storage-backfill.ts)
 // ---------------------------------------------------------------------------

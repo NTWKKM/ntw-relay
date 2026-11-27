@@ -96,8 +96,8 @@ function isValidChunk(data: Record<string, unknown>, chunkId: string, auth: Mock
   return true;
 }
 
-function canGet(auth: MockAuth | null, dropId: string, existing: Record<string, unknown>): boolean {
-  return Boolean(auth && isValidId(dropId) && existing.ownerId === auth.uid);
+function canGet(auth: MockAuth | null, dropId: string, existing: Record<string, unknown> | null): boolean {
+  return Boolean(auth && isValidId(dropId) && (existing === null || existing.ownerId === auth.uid));
 }
 
 function canList(auth: MockAuth | null, resource: Record<string, unknown>): boolean {
@@ -355,6 +355,14 @@ test('Legitimate owner operations succeed', () => {
   assert.equal(canGet(ownerAuth, 'drop_valid_1', validDrop), true);
   assert.equal(canList(ownerAuth, validDrop), true);
   assert.equal(canUpdate(ownerAuth, 'drop_valid_1', validDrop, { ...validDrop, isCode: true }), true);
+});
+
+test('Missing drop get: signed-in valid ID succeeds; unauthenticated, invalid ID, and cross-tenant existing drop are denied', () => {
+  assert.match(rulesText, /allow get:\s*if isSignedIn\(\)\s*&&\s*isValidId\(dropId\)\s*&&\s*\(resource == null \|\| existing\(\)\.ownerId == request\.auth\.uid\);/);
+  assert.equal(canGet(ownerAuth, 'drop_missing_1', null), true);
+  assert.equal(canGet(ownerAuth, '../evil$id', null), false);
+  assert.equal(canGet(null, 'drop_missing_1', null), false);
+  assert.equal(canGet(attackerAuth, 'drop_1', validDrop), false);
 });
 
 test('Chunk rules: cross-tenant read/list, spoofing, unverified, size/index bounds, extra fields, and updates are denied', () => {
