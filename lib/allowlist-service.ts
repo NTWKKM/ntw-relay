@@ -5,6 +5,7 @@ import {
   deleteDoc,
   doc,
   onSnapshot,
+  runTransaction,
   serverTimestamp,
   setDoc,
   type Timestamp,
@@ -157,17 +158,23 @@ export async function setAllowedUserStatus(params: {
     throw new Error('Invalid email address.');
   }
   const ref = doc(db, ALLOWED_USERS_COLLECTION, normalized);
-  await setDoc(
-    ref,
-    {
-      email: normalized,
-      status: params.status,
-      role: params.role ?? 'user',
-      updatedAt: serverTimestamp(),
-      reviewedBy: normalizeEmail(params.adminEmail),
-    },
-    { merge: true }
-  );
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const existingRole =
+      snap.exists() && snap.data()?.role === 'admin' ? 'admin' : 'user';
+    const nextRole = params.role ?? (snap.exists() ? existingRole : 'user');
+    tx.set(
+      ref,
+      {
+        email: normalized,
+        status: params.status,
+        role: nextRole,
+        updatedAt: serverTimestamp(),
+        reviewedBy: normalizeEmail(params.adminEmail),
+      },
+      { merge: true }
+    );
+  });
 }
 
 export async function removeAllowedUser(email: string): Promise<void> {
