@@ -44,6 +44,8 @@ service cloud.firestore {
     //   - chunkCount: int (optional, 0..14)
     //   - previewDataUrl: string (optional, <= 160000, JPEG base64 data URL)
     //   - isCode: bool (optional, mutable by owner)
+    //   - counted: bool (required true on create, immutable; marks bytes as recorded in /stats/storage.
+    //     Pre-counter legacy drops lack it and are deleted without touching /stats/storage.)
     //   - createdAt: timestamp (required, immutable, == request.time on create)
     //
     // Subcollection: /drops/{dropId}/chunks/{chunkId}
@@ -76,6 +78,7 @@ service cloud.firestore {
           'chunkCount',
           'previewDataUrl',
           'isCode',
+          'counted',
           'createdAt'
         ])
         && data.ownerId is string
@@ -92,7 +95,8 @@ service cloud.firestore {
         && (!('mimeType' in data) || (data.mimeType is string && data.mimeType.size() <= 128))
         && (!('chunkCount' in data) || (data.chunkCount is int && data.chunkCount >= 0 && data.chunkCount <= 14))
         && (!('previewDataUrl' in data) || (data.previewDataUrl is string && data.previewDataUrl.size() <= 160000 && data.previewDataUrl.matches('^data:image/jpeg;base64,[A-Za-z0-9+/=]+$')))
-        && (!('isCode' in data) || (data.isCode is bool));
+        && (!('isCode' in data) || (data.isCode is bool))
+        && (!('counted' in data) || (data.counted is bool));
     }
 
     function isValidChunk(data, chunkId) {
@@ -152,6 +156,13 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/drops/$(dropId)).data.ownerId == request.auth.uid;
     }
 
+    // Proves /stats/storage is written in this same request and attributed to dropId
+    function isStatsWrittenFor(dropId) {
+      return existsAfter(/databases/$(database)/documents/stats/storage)
+        && getAfter(/databases/$(database)/documents/stats/storage).data.lastDropId == dropId
+        && getAfter(/databases/$(database)/documents/stats/storage).data.updatedAt == request.time;
+    }
+
     // Personal Drop Collection: Private Single-Owner Drops
     match /drops/{dropId} {
       // Single-document read: strict owner isolation + Path ID hardening
@@ -167,7 +178,9 @@ service cloud.firestore {
       allow create: if isVerified()
         && isValidId(dropId)
         && isValidDrop(incoming())
-        && incoming().createdAt == request.time;
+        && incoming().createdAt == request.time
+        && incoming().get('counted', false) == true
+        && isStatsWrittenFor(dropId);
 
       // Pillar 4 & 5: Action-Based Update (only toggling isCode; ownerId & createdAt immutable)
       allow update: if isVerified()
@@ -178,10 +191,11 @@ service cloud.firestore {
         && incoming().createdAt == existing().createdAt
         && incoming().diff(existing()).affectedKeys().hasOnly(['isCode']);
 
-      // Delete: Verified owner only + Path ID hardening
+      // Delete: Verified owner only + Path ID hardening; counted drops must decrement /stats/storage atomically
       allow delete: if isVerified()
         && isValidId(dropId)
-        && existing().ownerId == request.auth.uid;
+        && existing().ownerId == request.auth.uid
+        && (existing().get('counted', false) != true || isStatsWrittenFor(dropId));
 
       // Chunked Binary Storage Subcollection (written before parent drop doc)
       match /chunks/{chunkId} {
@@ -232,6 +246,7 @@ service cloud.firestore {
           )
           || (
             isAtomicDropDelete(incoming().lastDropId)
+            && get(/databases/$(database)/documents/drops/$(incoming().lastDropId)).data.get('counted', false) == true
             && incoming().totalBytes == maxInt(
               0,
               existing().totalBytes - dropStorageBytes(get(/databases/$(database)/documents/drops/$(incoming().lastDropId)).data)

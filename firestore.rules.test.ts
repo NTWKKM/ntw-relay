@@ -34,6 +34,7 @@ const ALLOWED_KEYS = new Set([
   'chunkCount',
   'previewDataUrl',
   'isCode',
+  'counted',
   'createdAt',
 ]);
 const REQUIRED_KEYS = ['ownerId', 'type', 'content', 'createdAt'];
@@ -76,6 +77,7 @@ function isValidDrop(data: Record<string, unknown>, auth: MockAuth | null): bool
     return false;
   }
   if ('isCode' in data && typeof data.isCode !== 'boolean') return false;
+  if ('counted' in data && typeof data.counted !== 'boolean') return false;
   return true;
 }
 
@@ -108,7 +110,8 @@ function canCreate(auth: MockAuth | null, dropId: string, incoming: Record<strin
       auth.emailVerified === true &&
       isValidId(dropId) &&
       isValidDrop(incoming, auth) &&
-      incoming.createdAt === REQUEST_TIME
+      incoming.createdAt === REQUEST_TIME &&
+      incoming.counted === true
   );
 }
 
@@ -244,6 +247,7 @@ function canUpdateStorageStats(
     incBytes === Math.min(MAX_STORAGE_BYTES, extBytes + dropStorageBytes(batch.afterDrops[dropId]));
   const validDeleteTransition =
     isAtomicDropDelete(auth, dropId, batch) &&
+    batch.beforeDrops[dropId]?.counted === true &&
     incBytes === Math.max(0, extBytes - dropStorageBytes(batch.beforeDrops[dropId]));
   return validCreateTransition || validDeleteTransition;
 }
@@ -261,6 +265,7 @@ const validDrop: Record<string, unknown> = {
   type: 'text',
   content: 'สวัสดี Personal Drop https://example.com',
   isCode: false,
+  counted: true,
   createdAt: REQUEST_TIME,
 };
 
@@ -291,6 +296,8 @@ test('Dirty Dozen #4–#6: Identity spoofing, unverified email, and shadow field
   assert.equal(canCreate(ownerAuth, 'drop_1', { ...validDrop, ownerId: 'user_beta_2' }), false);
   assert.equal(canCreate(unverifiedAuth, 'drop_1', validDrop), false);
   assert.equal(canCreate(ownerAuth, 'drop_1', { ...validDrop, isAdmin: true }), false);
+  assert.equal(canCreate(ownerAuth, 'drop_1', { ...validDrop, counted: false }), false);
+  assert.equal(canCreate(ownerAuth, 'drop_1', { ...validDrop, counted: 'yes' }), false);
 });
 
 test('Dirty Dozen #7–#10: ID poisoning, 50KB overflow, unsafe/oversize previewDataUrl, fileSize/chunkCount overflow, and legacy storage fields are denied', () => {
@@ -425,7 +432,7 @@ test('Storage stats rules: unauthenticated get, list, delete, unverified writes,
     afterDrops: { drop_new_1: { ownerId: ownerAuth.uid, content: 'x'.repeat(1024) } },
   };
   const ownerDeleteBatch: MockDropBatchState = {
-    beforeDrops: { drop_del_1: { ownerId: ownerAuth.uid, content: 'x'.repeat(1000) } },
+    beforeDrops: { drop_del_1: { ownerId: ownerAuth.uid, counted: true, content: 'x'.repeat(1000) } },
     afterDrops: {},
   };
   const tinyCreateBatch: MockDropBatchState = {
@@ -433,7 +440,7 @@ test('Storage stats rules: unauthenticated get, list, delete, unverified writes,
     afterDrops: { drop_tiny_1: { ownerId: ownerAuth.uid, content: 'a' } },
   };
   const tinyDeleteBatch: MockDropBatchState = {
-    beforeDrops: { drop_tiny_del_1: { ownerId: ownerAuth.uid, content: 'a' } },
+    beforeDrops: { drop_tiny_del_1: { ownerId: ownerAuth.uid, counted: true, content: 'a' } },
     afterDrops: {},
   };
   const emptyBatch: MockDropBatchState = {
@@ -449,7 +456,7 @@ test('Storage stats rules: unauthenticated get, list, delete, unverified writes,
     afterDrops: { drop_other_1: { ownerId: attackerAuth.uid, content: 'x'.repeat(1024) } },
   };
   const crossOwnerDeleteBatch: MockDropBatchState = {
-    beforeDrops: { drop_other_2: { ownerId: attackerAuth.uid, content: 'x'.repeat(1000) } },
+    beforeDrops: { drop_other_2: { ownerId: attackerAuth.uid, counted: true, content: 'x'.repeat(1000) } },
     afterDrops: {},
   };
 
@@ -817,13 +824,14 @@ test('Storage stats rules: signed-in get, exact atomic drop create, and exact at
     },
   };
   const ownerDeleteBatch: MockDropBatchState = {
-    beforeDrops: { drop_del_1: { ownerId: ownerAuth.uid, content: 'x'.repeat(4096) } },
+    beforeDrops: { drop_del_1: { ownerId: ownerAuth.uid, counted: true, content: 'x'.repeat(4096) } },
     afterDrops: {},
   };
   const attackerDeleteBatch: MockDropBatchState = {
     beforeDrops: {
       drop_beta_del_1: {
         ownerId: attackerAuth.uid,
+        counted: true,
         content: 'กข', // 6 UTF-8 bytes
         fileSize: 2048,
       },
@@ -883,6 +891,17 @@ test('Storage stats rules: signed-in get, exact atomic drop create, and exact at
       attackerDeleteBatch
     ),
     true
+  );
+
+  // Legacy (uncounted) drop delete must never decrement the counter
+  assert.equal(
+    canUpdateStorageStats(
+      ownerAuth,
+      existingStats,
+      { totalBytes: (existingStats.totalBytes as number) - 4096, lastDropId: 'drop_legacy_1', updatedAt: REQUEST_TIME },
+      { beforeDrops: { drop_legacy_1: { ownerId: ownerAuth.uid, content: 'x'.repeat(4096) } }, afterDrops: {} }
+    ),
+    false
   );
 
   // 0-byte floor clamp on delete (existing < deletedDropBytes -> 0, and 0 -> 0)

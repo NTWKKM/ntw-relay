@@ -14,22 +14,32 @@ export const MAX_CHUNK_COUNT = Math.ceil(MAX_FILE_SIZE_BYTES / CHUNK_SIZE_BYTES)
 
 const utf8Encoder = new TextEncoder();
 
-/**
- * Estimates the Firestore storage footprint of a single drop in bytes,
- * clamped to the /stats/storage single-operation delta bound.
- */
-export function estimateDropStorageBytes(input: {
+interface DropBytesInput {
   content?: string;
   fileSize?: number;
   previewDataUrl?: string | null;
-}): number {
+}
+
+/**
+ * Estimates the raw (uncapped) storage footprint of a single drop in bytes.
+ * Used for Local sandbox usage, where files are not bound by the cloud counter delta.
+ */
+export function estimateDropRawBytes(input: DropBytesInput): number {
   const fileBytes =
     typeof input.fileSize === 'number' && Number.isFinite(input.fileSize) && input.fileSize > 0
       ? Math.round(input.fileSize)
       : 0;
   const textBytes = input.content ? utf8Encoder.encode(input.content).byteLength : 0;
   const previewBytes = input.previewDataUrl ? input.previewDataUrl.length : 0;
-  return Math.min(MAX_STORAGE_COUNTER_DELTA_BYTES, fileBytes + textBytes + previewBytes);
+  return fileBytes + textBytes + previewBytes;
+}
+
+/**
+ * Estimates the Firestore storage footprint of a single drop in bytes,
+ * clamped to the /stats/storage single-operation delta bound.
+ */
+export function estimateDropStorageBytes(input: DropBytesInput): number {
+  return Math.min(MAX_STORAGE_COUNTER_DELTA_BYTES, estimateDropRawBytes(input));
 }
 
 export interface StorageUsageSummary {

@@ -133,6 +133,7 @@ export function subscribeToUserDrops(
               ? data.previewDataUrl
               : undefined,
           isCode: typeof data.isCode === 'boolean' ? data.isCode : undefined,
+          counted: data.counted === true,
           createdAtMs,
           isLocalOnly: false,
         };
@@ -238,6 +239,7 @@ export async function createCloudTextDrop(userId: string, rawText: string): Prom
         type: 'text',
         content,
         isCode: looksLikeCode(content),
+        counted: true,
         createdAt: serverTimestamp(),
       });
       writeAtomicStorageCreate(
@@ -327,6 +329,7 @@ export async function uploadCloudFileDrop(
         mimeType: contentType,
         chunkCount: ranges.length,
         ...(previewDataUrl ? { previewDataUrl } : {}),
+        counted: true,
         createdAt: serverTimestamp(),
       });
       writeAtomicStorageCreate(
@@ -447,7 +450,8 @@ export async function deleteCloudDrop(item: DropItem): Promise<void> {
       }
       chunkRefs.forEach((ref) => tx.delete(ref));
       tx.delete(dropRef);
-      if (statsSnap.exists()) {
+      // Legacy (pre-counter) drops were never added to /stats/storage, so never subtract them
+      if (dropSnap.data().counted === true && statsSnap.exists()) {
         const rawCurrent = statsSnap.data().totalBytes;
         const current =
           typeof rawCurrent === 'number' && Number.isFinite(rawCurrent)

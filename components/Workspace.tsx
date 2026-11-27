@@ -50,7 +50,7 @@ import {
 import {
   buildAppShareUrl,
   computeStorageUsage,
-  estimateDropStorageBytes,
+  estimateDropRawBytes,
   filterDrops,
   formatBytes,
   generateDropId,
@@ -387,7 +387,10 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
     try {
       if (isCloudSynced) {
         const toDelete = items.filter((it) => targetIds.has(it.id));
-        await Promise.all(toDelete.map((it) => deleteCloudDrop(it)));
+        // Sequential: every delete transaction touches the shared /stats/storage doc
+        for (const it of toDelete) {
+          await deleteCloudDrop(it);
+        }
       } else {
         const next = getLocalDemoSnapshot().filter((it) => !targetIds.has(it.id));
         saveLocalDemoItems(next);
@@ -480,7 +483,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
   const storageUsage = useMemo(() => {
     const usedBytes = isCloudSynced
       ? (globalStorageBytes ?? 0)
-      : items.reduce((sum, it) => sum + estimateDropStorageBytes(it), 0);
+      : items.reduce((sum, it) => sum + estimateDropRawBytes(it), 0);
     return computeStorageUsage(usedBytes, SPARK_STORAGE_QUOTA_BYTES);
   }, [isCloudSynced, globalStorageBytes, items]);
 

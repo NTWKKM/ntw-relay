@@ -19,6 +19,8 @@ export interface DropItem {
   /** Small inline JPEG data URL (images only) so the feed renders without loading chunks. */
   previewDataUrl?: string;
   isCode?: boolean;
+  /** Cloud only: true when this drop's bytes are recorded in /stats/storage (absent on legacy drops). */
+  counted?: boolean;
   createdAtMs: number;
   /** True when stored only in localStorage demo mode (no public cloud URL) */
   isLocalOnly?: boolean;

@@ -1,0 +1,155 @@
+import test, { after, before, beforeEach } from 'node:test';
+import fs from 'node:fs';
+import path from 'node:path';
+import {
+  assertFails,
+  assertSucceeds,
+  initializeTestEnvironment,
+  type RulesTestEnvironment,
+} from '@firebase/rules-unit-testing';
+import {
+  deleteDoc,
+  doc,
+  getDoc,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  writeBatch,
+  type Firestore,
+} from 'firebase/firestore';
+
+/**
+ * Executes firestore.rules inside the Firestore emulator (run via `npm run test:rules`).
+ * Complements the JS mirror in firestore.rules.test.ts with real rule evaluation.
+ */
+
+const OWNER = 'user_alpha_1';
+const MAX_FILE_SIZE = 10485760;
+const STATS = ['stats', 'storage'] as const;
+const utf8 = new TextEncoder();
+
+let env: RulesTestEnvironment;
+
+before(async () => {
+  env = await initializeTestEnvironment({
+    projectId: 'demo-ntw-relay',
+    firestore: { rules: fs.readFileSync(path.resolve(process.cwd(), 'firestore.rules'), 'utf8') },
+  });
+});
+
+after(async () => {
+  await env?.cleanup();
+});
+
+beforeEach(async () => {
+  await env.clearFirestore();
+});
+
+function ownerDb(): Firestore {
+  return env.authenticatedContext(OWNER, { email_verified: true }).firestore() as unknown as Firestore;
+}
+
+function textDrop(content: string, extra: Record<string, unknown> = {}) {
+  return {
+    ownerId: OWNER,
+    type: 'text',
+    content,
+    isCode: false,
+    counted: true,
+    createdAt: serverTimestamp(),
+    ...extra,
+  };
+}
+
+function textBytes(content: string): number {
+  return utf8.encode(content).byteLength;
+}
+
+/** Atomic drop create + /stats/storage create/update in one batch. */
+function atomicCreate(db: Firestore, dropId: string, drop: Record<string, unknown>, totalBytes: number, statsExists: boolean) {
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'drops', dropId), drop);
+  const stats = { totalBytes, lastDropId: dropId, updatedAt: serverTimestamp() };
+  if (statsExists) batch.update(doc(db, ...STATS), stats);
+  else batch.set(doc(db, ...STATS), stats);
+  return batch.commit();
+}
+
+async function seed(docs: Record<string, Record<string, unknown>>) {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore() as unknown as Firestore;
+    for (const [p, data] of Object.entries(docs)) {
+      await setDoc(doc(db, p), data);
+    }
+  });
+}
+
+test('standalone drop create without a /stats/storage write is denied', async () => {
+  const db = ownerDb();
+  await assertFails(setDoc(doc(db, 'drops', 'drop_solo_1'), textDrop('hello')));
+});
+
+test('drop create missing the counted marker is denied even with a stats write', async () => {
+  const db = ownerDb();
+  const { counted: _counted, ...uncounted } = textDrop('hello');
+  await assertFails(atomicCreate(db, 'drop_nomark_1', uncounted, textBytes('hello'), false));
+});
+
+test('atomic drop + stats initialization, then atomic increment, succeed with exact bytes', async () => {
+  const db = ownerDb();
+  await assertSucceeds(atomicCreate(db, 'drop_a', textDrop('สวัสดี'), textBytes('สวัสดี'), false));
+  const second = textBytes('สวัสดี') + textBytes('abc');
+  await assertSucceeds(atomicCreate(db, 'drop_b', textDrop('abc'), second, true));
+  const snap = await getDoc(doc(db, ...STATS));
+  if (snap.data()?.totalBytes !== second) throw new Error(`unexpected totalBytes ${snap.data()?.totalBytes}`);
+});
+
+test('atomic create with an inflated byte claim is denied', async () => {
+  const db = ownerDb();
+  await assertFails(atomicCreate(db, 'drop_c', textDrop('abc'), 11000000, false));
+});
+
+test('file drop at the 10 MiB limit succeeds; fileSize above the limit is denied', async () => {
+  const db = ownerDb();
+  const file = (fileSize: number) =>
+    textDrop('a.bin', { type: 'file', fileName: 'a.bin', fileSize, mimeType: 'application/octet-stream', chunkCount: 14 });
+  await assertFails(atomicCreate(db, 'drop_big', file(MAX_FILE_SIZE + 1), MAX_FILE_SIZE + 1 + 5, false));
+  await assertSucceeds(atomicCreate(db, 'drop_max', file(MAX_FILE_SIZE), MAX_FILE_SIZE + 5, false));
+});
+
+test('counted drop delete must decrement /stats/storage atomically', async () => {
+  const db = ownerDb();
+  await assertSucceeds(atomicCreate(db, 'drop_d', textDrop('abcd'), 4, false));
+  await assertFails(deleteDoc(doc(db, 'drops', 'drop_d')));
+
+  const batch = writeBatch(db);
+  batch.delete(doc(db, 'drops', 'drop_d'));
+  batch.update(doc(db, ...STATS), { totalBytes: 0, lastDropId: 'drop_d', updatedAt: serverTimestamp() });
+  await assertSucceeds(batch.commit());
+});
+
+test('legacy (uncounted) drop can be deleted when /stats/storage is missing', async () => {
+  await seed({
+    'drops/drop_legacy_1': { ownerId: OWNER, type: 'text', content: 'old', createdAt: new Date() },
+  });
+  await assertSucceeds(deleteDoc(doc(ownerDb(), 'drops', 'drop_legacy_1')));
+});
+
+test('legacy (uncounted) drop delete may not decrement /stats/storage', async () => {
+  await seed({
+    'drops/drop_legacy_2': { ownerId: OWNER, type: 'text', content: 'oldold', createdAt: new Date() },
+    'stats/storage': { totalBytes: 100, lastDropId: 'drop_prev', updatedAt: new Date() },
+  });
+  const db = ownerDb();
+  const batch = writeBatch(db);
+  batch.delete(doc(db, 'drops', 'drop_legacy_2'));
+  batch.update(doc(db, ...STATS), { totalBytes: 94, lastDropId: 'drop_legacy_2', updatedAt: serverTimestamp() });
+  await assertFails(batch.commit());
+});
+
+test('owner may toggle isCode but not the counted marker', async () => {
+  const db = ownerDb();
+  await assertSucceeds(atomicCreate(db, 'drop_t', textDrop('x'), 1, false));
+  await assertSucceeds(updateDoc(doc(db, 'drops', 'drop_t'), { isCode: true }));
+  await assertFails(updateDoc(doc(db, 'drops', 'drop_t'), { counted: false }));
+});

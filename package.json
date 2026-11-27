@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "node --import jiti/register --test lib/drop-utils.test.ts firestore.rules.test.ts",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-ntw-relay \"node --import jiti/register --test firestore.rules.emulator.test.ts\"",
     "clean": "node -e \"const fs=require('fs'); for (const d of ['.next','out']) fs.rmSync(d,{recursive:true,force:true});\""
   },
   "dependencies": {
@@ -28,6 +29,7 @@
     "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^6.0.0",
     "@tailwindcss/postcss": "4.1.11",
     "@tailwindcss/typography": "^0.5.19",
     "@types/node": "^20",
