@@ -186,6 +186,51 @@ test('resolveAuthGuardDecision protects Workspace and Firestore when Firebase is
     resolveAuthGuardDecision({ isFirebaseConfigured: false, authReady: true, hasUser: false }),
     'allow_local_demo'
   );
+  assert.equal(
+    resolveAuthGuardDecision({
+      isFirebaseConfigured: true,
+      authReady: true,
+      hasUser: true,
+      allowlistState: 'loading',
+    }),
+    'loading'
+  );
+  assert.equal(
+    resolveAuthGuardDecision({
+      isFirebaseConfigured: true,
+      authReady: true,
+      hasUser: true,
+      allowlistState: 'pending',
+    }),
+    'pending_approval'
+  );
+  assert.equal(
+    resolveAuthGuardDecision({
+      isFirebaseConfigured: true,
+      authReady: true,
+      hasUser: true,
+      allowlistState: 'rejected',
+    }),
+    'pending_approval'
+  );
+  assert.equal(
+    resolveAuthGuardDecision({
+      isFirebaseConfigured: true,
+      authReady: true,
+      hasUser: true,
+      allowlistState: 'unverified',
+    }),
+    'pending_approval'
+  );
+  assert.equal(
+    resolveAuthGuardDecision({
+      isFirebaseConfigured: true,
+      authReady: true,
+      hasUser: true,
+      allowlistState: 'approved',
+    }),
+    'allow_cloud'
+  );
 });
 
 test('material theme resolution defaults to Atelier Paper light and toggles cleanly', () => {
