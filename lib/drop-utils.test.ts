@@ -29,6 +29,7 @@ import {
 } from './drop-utils';
 import { mapFirebaseAuthError, validateEmailAuthInput } from './auth-errors';
 import { resolveAuthGuardDecision } from './auth-guard';
+import { resolveNextAllowedUserRole } from './allowlist-service';
 import { getNextTheme, resolveStoredTheme } from './theme';
 import type { DropItem } from './types';
 
@@ -230,6 +231,25 @@ test('resolveAuthGuardDecision protects Workspace and Firestore when Firebase is
       allowlistState: 'approved',
     }),
     'allow_cloud'
+  );
+});
+
+test('resolveNextAllowedUserRole preserves existing admin role when requestedRole is omitted', () => {
+  assert.equal(
+    resolveNextAllowedUserRole({ exists: true, existingRole: 'admin' }),
+    'admin'
+  );
+  assert.equal(
+    resolveNextAllowedUserRole({ exists: true, existingRole: 'user' }),
+    'user'
+  );
+  assert.equal(
+    resolveNextAllowedUserRole({ exists: false }),
+    'user'
+  );
+  assert.equal(
+    resolveNextAllowedUserRole({ exists: true, existingRole: 'admin', requestedRole: 'user' }),
+    'user'
   );
 });
 

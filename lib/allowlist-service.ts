@@ -146,6 +146,16 @@ export function subscribeToAllAllowedUsers(
   );
 }
 
+export function resolveNextAllowedUserRole(params: {
+  exists: boolean;
+  existingRole?: unknown;
+  requestedRole?: 'admin' | 'user';
+}): 'admin' | 'user' {
+  if (params.requestedRole) return params.requestedRole;
+  if (params.exists && params.existingRole === 'admin') return 'admin';
+  return 'user';
+}
+
 export async function setAllowedUserStatus(params: {
   email: string;
   status: AllowlistStatus;
@@ -160,9 +170,11 @@ export async function setAllowedUserStatus(params: {
   const ref = doc(db, ALLOWED_USERS_COLLECTION, normalized);
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
-    const existingRole =
-      snap.exists() && snap.data()?.role === 'admin' ? 'admin' : 'user';
-    const nextRole = params.role ?? (snap.exists() ? existingRole : 'user');
+    const nextRole = resolveNextAllowedUserRole({
+      exists: snap.exists(),
+      existingRole: snap.exists() ? snap.data()?.role : undefined,
+      requestedRole: params.role,
+    });
     tx.set(
       ref,
       {
