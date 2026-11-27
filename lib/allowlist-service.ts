@@ -8,6 +8,7 @@ import {
   runTransaction,
   serverTimestamp,
   setDoc,
+  type Firestore,
   type Timestamp,
   type Unsubscribe,
 } from 'firebase/firestore';
@@ -156,19 +157,21 @@ export function resolveNextAllowedUserRole(params: {
   return 'user';
 }
 
-export async function setAllowedUserStatus(params: {
-  email: string;
-  status: AllowlistStatus;
-  adminEmail: string;
-  role?: 'admin' | 'user';
-}): Promise<void> {
-  if (!db) throw new Error('Firestore is not configured.');
+export async function setAllowedUserStatusWithDb(
+  firestoreDb: Firestore,
+  params: {
+    email: string;
+    status: AllowlistStatus;
+    adminEmail: string;
+    role?: 'admin' | 'user';
+  }
+): Promise<void> {
   const normalized = normalizeEmail(params.email);
   if (!isValidEmailFormat(normalized)) {
     throw new Error('Invalid email address.');
   }
-  const ref = doc(db, ALLOWED_USERS_COLLECTION, normalized);
-  await runTransaction(db, async (tx) => {
+  const ref = doc(firestoreDb, ALLOWED_USERS_COLLECTION, normalized);
+  await runTransaction(firestoreDb, async (tx) => {
     const snap = await tx.get(ref);
     const nextRole = resolveNextAllowedUserRole({
       exists: snap.exists(),
@@ -187,6 +190,16 @@ export async function setAllowedUserStatus(params: {
       { merge: true }
     );
   });
+}
+
+export async function setAllowedUserStatus(params: {
+  email: string;
+  status: AllowlistStatus;
+  adminEmail: string;
+  role?: 'admin' | 'user';
+}): Promise<void> {
+  if (!db) throw new Error('Firestore is not configured.');
+  return setAllowedUserStatusWithDb(db, params);
 }
 
 export async function removeAllowedUser(email: string): Promise<void> {

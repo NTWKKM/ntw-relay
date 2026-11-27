@@ -20,6 +20,7 @@ import {
 import { initializeApp as initializeAdminApp, deleteApp, type App } from 'firebase-admin/app';
 import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
 import { recomputeStorageStats } from './lib/storage-backfill';
+import { setAllowedUserStatusWithDb } from './lib/allowlist-service';
 
 /**
  * Executes firestore.rules inside the Firestore emulator (run via `npm run test:rules`).
@@ -373,4 +374,30 @@ test('allowed_users: admin can approve, reject, and delete others; non-admin is 
 
   // Admin cannot delete their own record
   await assertFails(deleteDoc(doc(admin, 'allowed_users', ADMIN_EMAIL)));
+});
+
+test('allowed_users: status-only update preserves admin role in Firestore even when caller has stale user view', async () => {
+  const promotedEmail = 'promoted@example.com';
+  await seed({
+    [`allowed_users/${promotedEmail}`]: {
+      email: promotedEmail,
+      status: 'pending',
+      role: 'admin',
+      updatedAt: new Date(),
+    },
+  });
+
+  const admin = adminDb();
+  await assertSucceeds(
+    setAllowedUserStatusWithDb(admin, {
+      email: promotedEmail,
+      status: 'approved',
+      adminEmail: ADMIN_EMAIL,
+    })
+  );
+
+  const snap = await getDoc(doc(admin, 'allowed_users', promotedEmail));
+  if (snap.data()?.status !== 'approved' || snap.data()?.role !== 'admin') {
+    throw new Error(`expected approved admin, got ${JSON.stringify(snap.data())}`);
+  }
 });
