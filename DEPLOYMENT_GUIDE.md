@@ -28,11 +28,11 @@ then recompute the counter once with the Admin SDK (no Cloud Functions needed):
    Store the JSON outside the repo and never commit it.
 2. Dry run (default, writes nothing) and review `newlyCounted`, `skipped`, `nextTotalBytes`:
    ```bash
-   GOOGLE_APPLICATION_CREDENTIALS=~/keys/ntw-relay-admin.json npm run backfill:storage
+   GOOGLE_APPLICATION_CREDENTIALS=~/keys/relay-admin.json npm run backfill:storage
    ```
 3. Apply:
    ```bash
-   GOOGLE_APPLICATION_CREDENTIALS=~/keys/ntw-relay-admin.json npm run backfill:storage -- --apply
+   GOOGLE_APPLICATION_CREDENTIALS=~/keys/relay-admin.json npm run backfill:storage -- --apply
    ```
 
 The script (`lib/storage-backfill.ts`) reads `/stats/storage` and every drop in **one transaction**,

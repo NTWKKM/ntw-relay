@@ -76,7 +76,7 @@ export function createInitialDemoItems(nowMs: number = Date.now()): DropItem[] {
       ownerId: 'local_demo',
       type: 'image',
       content: 'NTW Relay sync architecture reference diagram',
-      fileName: 'ntw-relay-architecture.svg',
+      fileName: 'relay-architecture.svg',
       fileSize: 2840,
       mimeType: 'image/svg+xml',
       downloadUrl: createDemoScreenshotDataUrl(),

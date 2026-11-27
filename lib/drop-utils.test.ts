@@ -54,7 +54,7 @@ test('parseTextSegments extracts URLs cleanly without trailing punctuation', () 
 test('looksLikeCode detects code snippets and leaves prose/Thai/URLs as normal text', () => {
   assert.equal(looksLikeCode('https://console.firebase.google.com'), false);
   assert.equal(looksLikeCode('อย่าลืมส่งไฟล์รายงานสรุปให้ทีมตอนเย็นนะครับ'), false);
-  assert.equal(looksLikeCode('{"projectId": "ntw-relay", "sync": true}'), true);
+  assert.equal(looksLikeCode('{"projectId": "relay", "sync": true}'), true);
   assert.equal(
     looksLikeCode('const upload = async (file: File) => {\n  return await getDownloadURL(ref);\n};'),
     true
@@ -202,12 +202,12 @@ test('buildAppShareUrl appends subpath basePath cleanly for GitHub Pages QR', ()
   assert.equal(buildAppShareUrl('http://localhost:3000', '   '), 'http://localhost:3000');
   assert.equal(buildAppShareUrl('http://localhost:3000', ' / '), 'http://localhost:3000');
   assert.equal(
-    buildAppShareUrl('https://ntwkkm.github.io', '/ntw-relay'),
-    'https://ntwkkm.github.io/ntw-relay/'
+    buildAppShareUrl('https://ntwkkm.github.io', '/relay'),
+    'https://ntwkkm.github.io/relay/'
   );
   assert.equal(
-    buildAppShareUrl('https://ntwkkm.github.io/', ' ntw-relay/ '),
-    'https://ntwkkm.github.io/ntw-relay/'
+    buildAppShareUrl('https://ntwkkm.github.io/', ' relay/ '),
+    'https://ntwkkm.github.io/relay/'
   );
 });
 
@@ -245,8 +245,8 @@ test('Firestore-chunked files are downloadable and QR points to the app instead 
   assert.equal(hasFileData({ ...chunked, chunkCount: 0 }), true);
   assert.equal(hasFileData({ ...chunked, chunkCount: undefined }), false);
 
-  const withApp = getQrPayload(chunked, 'https://ntwkkm.github.io/ntw-relay/');
-  assert.equal(withApp.value, 'https://ntwkkm.github.io/ntw-relay/');
+  const withApp = getQrPayload(chunked, 'https://ntwkkm.github.io/relay/');
+  assert.equal(withApp.value, 'https://ntwkkm.github.io/relay/');
   assert.match(withApp.label, /sign in to download report\.pdf/);
 
   const noApp = getQrPayload(chunked);

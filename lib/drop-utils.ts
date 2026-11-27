@@ -422,7 +422,7 @@ export function getQrPayload(
 
 /**
  * Builds the canonical shareable workspace URL, preserving any subpath deployment basePath
- * (e.g. https://ntwkkm.github.io + /ntw-relay -> https://ntwkkm.github.io/ntw-relay/).
+ * (e.g. https://ntwkkm.github.io + /relay -> https://ntwkkm.github.io/relay/).
  */
 export function buildAppShareUrl(origin: string, basePath: string = ''): string {
   const cleanOrigin = origin.replace(/\/+$/, '');
