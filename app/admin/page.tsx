@@ -120,13 +120,11 @@ function AdminAllowlistContent() {
     }
 
     setBusyKey(`add:${normalized}`);
-    const existing = users.find((u) => normalizeEmail(u.email) === normalized);
     try {
       await setAllowedUserStatus({
         email: normalized,
         status: 'approved',
         adminEmail: user?.email ?? '',
-        role: existing?.role,
       });
       setNewEmail('');
     } catch (err) {
@@ -139,13 +137,11 @@ function AdminAllowlistContent() {
   async function handleStatusChange(email: string, status: AllowlistStatus) {
     setError(null);
     setBusyKey(`${status}:${email}`);
-    const existing = users.find((u) => normalizeEmail(u.email) === normalizeEmail(email));
     try {
       await setAllowedUserStatus({
         email,
         status,
         adminEmail: user?.email ?? '',
-        role: existing?.role,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update status.');
