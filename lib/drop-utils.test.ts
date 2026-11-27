@@ -295,6 +295,8 @@ test('getQrPayload caps text by UTF-8 byte length on code-point boundaries (Thai
 
 test('estimateDropStorageBytes and computeStorageUsage bound deltas and compute meter thresholds', () => {
   assert.equal(estimateDropStorageBytes({ content: 'hello' }), 5);
+  // Fractional legacy fileSize truncates like firestore.rules int(): 1 + 1 = 2, never rounded to 3
+  assert.equal(estimateDropStorageBytes({ content: 'a', fileSize: 1.8 }), 2);
   assert.equal(estimateDropStorageBytes({ content: 'กข', fileSize: 1024, previewDataUrl: 'abc' }), 6 + 1024 + 3);
   assert.equal(
     estimateDropStorageBytes({ fileSize: MAX_FILE_SIZE_BYTES + 5_000_000 }),

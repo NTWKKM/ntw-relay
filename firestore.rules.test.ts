@@ -812,7 +812,9 @@ test('Storage stats rules: signed-in get, exact atomic drop create, and exact at
       },
     },
   };
-  // Largest drop isValidDrop accepts: 10485760 + 50000 + 160000 = 10695760 bytes (below the 11 MB cap)
+  // Large valid drop: 10485760 + 50000 + 160000 = 10695760 bytes with ASCII content. Multi-byte content
+  // (Thai 3 B, astral 4 B per char) raises the ceiling to at most 10485760 + 200000 + 160000 = 10845760,
+  // still below the 11 MB cap, so valid drops never hit the clamp.
   const maxValidPreview = `data:image/jpeg;base64,${'A'.repeat(160000 - 'data:image/jpeg;base64,'.length)}`;
   const maxValidDrop: Record<string, unknown> = {
     ...validDrop,

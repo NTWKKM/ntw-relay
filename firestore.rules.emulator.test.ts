@@ -212,6 +212,25 @@ test('backfill recomputes exact totals, marks legacy drops, skips unsizable ones
   if (again.newlyCounted.length !== 0 || again.nextTotalBytes !== 4) throw new Error(JSON.stringify(again));
 });
 
+test('backfilled drop with fractional legacy fileSize decrements by the truncated rules delta', async () => {
+  await seed({
+    'drops/drop_frac_1': { ownerId: OWNER, type: 'file', content: 'a', fileSize: 1.8, createdAt: new Date() },
+    'drops/drop_keep_1': { ownerId: OWNER, type: 'text', content: 'x'.repeat(100), createdAt: new Date() },
+  });
+  const report = await recomputeStorageStats(getAdminFirestore(adminApp), { apply: true });
+  if (report.nextTotalBytes !== 2 + 100) throw new Error(JSON.stringify(report));
+
+  const db = ownerDb();
+  const decrement = (totalBytes: number) => {
+    const batch = writeBatch(db);
+    batch.delete(doc(db, 'drops', 'drop_frac_1'));
+    batch.update(doc(db, ...STATS), { totalBytes, lastDropId: 'drop_frac_1', updatedAt: serverTimestamp() });
+    return batch.commit();
+  };
+  await assertFails(decrement(102 - 3)); // Math.round(1.8) + 1 would be rejected
+  await assertSucceeds(decrement(102 - 2)); // int(1.8) + 1 matches rules
+});
+
 test('backfill on an empty project writes nothing', async () => {
   const report = await recomputeStorageStats(getAdminFirestore(adminApp), { apply: true });
   if (report.applied || report.dropCount !== 0) throw new Error(JSON.stringify(report));

@@ -38,7 +38,7 @@ function unsizableReason(d: DocumentData): string | null {
 function rulesDropBytes(d: DocumentData): number {
   return estimateDropStorageBytes({
     content: d.content as string,
-    fileSize: typeof d.fileSize === 'number' ? Math.trunc(d.fileSize) : undefined,
+    fileSize: typeof d.fileSize === 'number' ? d.fileSize : undefined,
     previewDataUrl: typeof d.previewDataUrl === 'string' ? d.previewDataUrl : undefined,
   });
 }

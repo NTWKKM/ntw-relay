@@ -27,7 +27,7 @@ interface DropBytesInput {
 export function estimateDropRawBytes(input: DropBytesInput): number {
   const fileBytes =
     typeof input.fileSize === 'number' && Number.isFinite(input.fileSize) && input.fileSize > 0
-      ? Math.round(input.fileSize)
+      ? Math.trunc(input.fileSize) // matches firestore.rules int(d.fileSize) (truncation)
       : 0;
   const textBytes = input.content ? utf8Encoder.encode(input.content).byteLength : 0;
   const previewBytes = input.previewDataUrl ? input.previewDataUrl.length : 0;

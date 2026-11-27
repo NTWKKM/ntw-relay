@@ -427,7 +427,6 @@ export async function deleteCloudDrop(item: DropItem): Promise<void> {
   const path = `${DROPS_COLLECTION}/${item.id}`;
   const dropRef = doc(firestore, DROPS_COLLECTION, item.id);
   const statsRef = doc(firestore, STATS_COLLECTION, STORAGE_STATS_DOC);
-  const removedBytes = Math.max(0, clampDeltaBytes(estimateDropStorageBytes(item)));
 
   try {
     let chunkRefs: DocumentReference[] = [];
@@ -457,6 +456,13 @@ export async function deleteCloudDrop(item: DropItem): Promise<void> {
           typeof rawCurrent === 'number' && Number.isFinite(rawCurrent)
             ? Math.max(0, Math.floor(rawCurrent))
             : 0;
+        // Size from the transaction's own snapshot so the delta matches rules dropStorageBytes(get(drop))
+        const stored = dropSnap.data();
+        const removedBytes = estimateDropStorageBytes({
+          content: typeof stored.content === 'string' ? stored.content : '',
+          fileSize: typeof stored.fileSize === 'number' ? stored.fileSize : undefined,
+          previewDataUrl: typeof stored.previewDataUrl === 'string' ? stored.previewDataUrl : undefined,
+        });
         const next = Math.max(0, current - removedBytes);
         tx.update(statsRef, {
           totalBytes: next,
