@@ -20,6 +20,11 @@ import {
 import { initializeApp as initializeAdminApp, deleteApp, type App } from 'firebase-admin/app';
 import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
 import { recomputeStorageStats } from './lib/storage-backfill';
+import { setAllowedUserStatusWithDb } from './lib/allowlist-service';
+import {
+  submitAllowlistStatusChange,
+  submitPreapprovedEmail,
+} from './lib/admin-allowlist-actions';
 
 /**
  * Executes firestore.rules inside the Firestore emulator (run via `npm run test:rules`).
@@ -27,6 +32,11 @@ import { recomputeStorageStats } from './lib/storage-backfill';
  */
 
 const OWNER = 'user_alpha_1';
+const OWNER_EMAIL = 'owner@example.com';
+const ADMIN_UID = 'admin_1';
+const ADMIN_EMAIL = 'admin@example.com';
+const PENDING_UID = 'user_pending_1';
+const PENDING_EMAIL = 'pending@example.com';
 const MAX_FILE_SIZE = 10485760;
 const STATS = ['stats', 'storage'] as const;
 const utf8 = new TextEncoder();
@@ -49,10 +59,38 @@ after(async () => {
 
 beforeEach(async () => {
   await env.clearFirestore();
+  await seed({
+    [`allowed_users/${OWNER_EMAIL}`]: {
+      email: OWNER_EMAIL,
+      status: 'approved',
+      role: 'user',
+      updatedAt: new Date(),
+    },
+    [`allowed_users/${ADMIN_EMAIL}`]: {
+      email: ADMIN_EMAIL,
+      status: 'approved',
+      role: 'admin',
+      updatedAt: new Date(),
+    },
+  });
 });
 
 function ownerDb(): Firestore {
-  return env.authenticatedContext(OWNER, { email_verified: true }).firestore() as unknown as Firestore;
+  return env
+    .authenticatedContext(OWNER, { email: OWNER_EMAIL, email_verified: true })
+    .firestore() as unknown as Firestore;
+}
+
+function adminDb(): Firestore {
+  return env
+    .authenticatedContext(ADMIN_UID, { email: ADMIN_EMAIL, email_verified: true })
+    .firestore() as unknown as Firestore;
+}
+
+function userDb(uid: string, email: string, emailVerified = true): Firestore {
+  return env
+    .authenticatedContext(uid, { email, email_verified: emailVerified })
+    .firestore() as unknown as Firestore;
 }
 
 function textDrop(content: string, extra: Record<string, unknown> = {}) {
@@ -170,7 +208,16 @@ test('signed-in get on a missing drop returns non-existent; unauthenticated and 
   const unauthDb = env.unauthenticatedContext().firestore() as unknown as Firestore;
   await assertFails(getDoc(doc(unauthDb, 'drops', 'drop_missing_1')));
 
-  const otherDb = env.authenticatedContext('user_beta_2', { email_verified: true }).firestore() as unknown as Firestore;
+  const otherEmail = 'beta@example.com';
+  await seed({
+    [`allowed_users/${otherEmail}`]: {
+      email: otherEmail,
+      status: 'approved',
+      role: 'user',
+      updatedAt: new Date(),
+    },
+  });
+  const otherDb = userDb('user_beta_2', otherEmail, true);
   await assertFails(getDoc(doc(otherDb, 'drops', 'drop_existing_1')));
 });
 
@@ -249,4 +296,131 @@ test('backfill on an empty project writes nothing', async () => {
   const report = await recomputeStorageStats(getAdminFirestore(adminApp), { apply: true });
   if (report.applied || report.dropCount !== 0) throw new Error(JSON.stringify(report));
   if ((await statsTotal()) !== undefined) throw new Error('empty backfill created /stats/storage');
+});
+
+test('allowed_users: verified user can self-request pending only; cannot self-approve or become admin', async () => {
+  const pending = userDb(PENDING_UID, PENDING_EMAIL);
+  await assertFails(
+    setDoc(doc(pending, 'allowed_users', PENDING_EMAIL), {
+      email: PENDING_EMAIL,
+      status: 'approved',
+      role: 'user',
+      requestedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertFails(
+    setDoc(doc(pending, 'allowed_users', PENDING_EMAIL), {
+      email: PENDING_EMAIL,
+      status: 'pending',
+      role: 'admin',
+      requestedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertSucceeds(
+    setDoc(doc(pending, 'allowed_users', PENDING_EMAIL), {
+      email: PENDING_EMAIL,
+      status: 'pending',
+      role: 'user',
+      uid: PENDING_UID,
+      requestedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  );
+  // Pending user cannot access drops until approved
+  await assertFails(
+    atomicCreate(pending, 'drop_pending_1', textDrop('blocked', { ownerId: PENDING_UID }), textBytes('blocked'), false)
+  );
+});
+
+test('allowed_users: admin can approve, reject, and delete others; non-admin is denied', async () => {
+  const pending = userDb(PENDING_UID, PENDING_EMAIL);
+  const admin = adminDb();
+  const nonAdmin = ownerDb();
+
+  await assertSucceeds(
+    setDoc(doc(pending, 'allowed_users', PENDING_EMAIL), {
+      email: PENDING_EMAIL,
+      status: 'pending',
+      role: 'user',
+      uid: PENDING_UID,
+      requestedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  );
+
+  // Non-admin cannot approve or delete
+  await assertFails(
+    updateDoc(doc(nonAdmin, 'allowed_users', PENDING_EMAIL), {
+      status: 'approved',
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertFails(deleteDoc(doc(nonAdmin, 'allowed_users', PENDING_EMAIL)));
+
+  // Admin can approve, then reject, then delete
+  await assertSucceeds(
+    updateDoc(doc(admin, 'allowed_users', PENDING_EMAIL), {
+      status: 'approved',
+      reviewedBy: ADMIN_EMAIL,
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertSucceeds(
+    updateDoc(doc(admin, 'allowed_users', PENDING_EMAIL), {
+      status: 'rejected',
+      reviewedBy: ADMIN_EMAIL,
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertSucceeds(deleteDoc(doc(admin, 'allowed_users', PENDING_EMAIL)));
+
+  // Admin cannot delete their own record
+  await assertFails(deleteDoc(doc(admin, 'allowed_users', ADMIN_EMAIL)));
+});
+
+test('allowed_users: status-only update through admin handlers preserves admin role in Firestore even with stale user list', async () => {
+  const promotedEmail = 'promoted@example.com';
+  // Stale client list still shows role: 'user', while Firestore already holds role: 'admin'
+  const staleUsersList = [{ email: promotedEmail, status: 'pending' as const, role: 'user' as const }];
+  await seed({
+    [`allowed_users/${promotedEmail}`]: {
+      email: promotedEmail,
+      status: 'pending',
+      role: 'admin',
+      updatedAt: new Date(),
+    },
+  });
+
+  const admin = adminDb();
+  const updateStatus = (params: Parameters<typeof setAllowedUserStatusWithDb>[1]) =>
+    setAllowedUserStatusWithDb(admin, params);
+
+  await assertSucceeds(
+    submitAllowlistStatusChange({
+      email: staleUsersList[0].email,
+      status: 'approved',
+      adminEmail: ADMIN_EMAIL,
+      updateStatus,
+    })
+  );
+
+  let snap = await getDoc(doc(admin, 'allowed_users', promotedEmail));
+  if (snap.data()?.status !== 'approved' || snap.data()?.role !== 'admin') {
+    throw new Error(`expected approved admin after status change, got ${JSON.stringify(snap.data())}`);
+  }
+
+  await assertSucceeds(
+    submitPreapprovedEmail({
+      email: promotedEmail,
+      adminEmail: ADMIN_EMAIL,
+      updateStatus,
+    })
+  );
+
+  snap = await getDoc(doc(admin, 'allowed_users', promotedEmail));
+  if (snap.data()?.status !== 'approved' || snap.data()?.role !== 'admin') {
+    throw new Error(`expected approved admin after preapprove, got ${JSON.stringify(snap.data())}`);
+  }
 });

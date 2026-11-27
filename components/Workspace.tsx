@@ -16,6 +16,7 @@ import {
   Moon,
   QrCode,
   Search,
+  Shield,
   Sun,
   Trash2,
   X,
@@ -89,7 +90,7 @@ interface WorkspaceProps {
 }
 
 export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
-  const { user: firebaseUser, authReady, refreshUser } = useAuthUser();
+  const { user: firebaseUser, authReady, isAdmin, refreshUser } = useAuthUser();
   const { theme, toggleTheme } = useMaterialTheme();
   const isCloudSynced = Boolean(!forceLocalDemo && isFirebaseConfigured && firebaseUser);
 
@@ -737,7 +738,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
             ·
           </span>
           <div className="flex items-center gap-1.5 min-w-0">
-            {isCloudSynced ? (
+          {isCloudSynced ? (
               <>
                 <Cloud
                   className="w-3.5 h-3.5 text-[#15803D] dark:text-[#4ADE80] shrink-0"
@@ -825,6 +826,18 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
               <Sun className="w-3.5 h-3.5" aria-hidden="true" />
             )}
           </button>
+
+          {isCloudSynced && isAdmin && (
+            <Link
+              href="/admin"
+              aria-label="Allowlist Admin"
+              title="Allowlist Admin"
+              className="h-8 px-2.5 rounded-lg text-xs font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#EAE5DB] dark:hover:bg-[#22201C] transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0"
+            >
+              <Shield className="w-3.5 h-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">Admin</span>
+            </Link>
+          )}
 
           {isCloudSynced ? (
             <button

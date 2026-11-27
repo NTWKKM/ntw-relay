@@ -8,16 +8,47 @@ service cloud.firestore {
     }
 
     // Phase 3: Reusable Hardened Primitives
-    function isSignedIn() {
+    function hasAuth() {
       return request.auth != null;
     }
 
+    function hasVerifiedEmail() {
+      return hasAuth()
+        && request.auth.token.email is string
+        && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return hasVerifiedEmail()
+        && exists(/databases/$(database)/documents/allowed_users/$(request.auth.token.email.lower()))
+        && get(/databases/$(database)/documents/allowed_users/$(request.auth.token.email.lower())).data.role == 'admin'
+        && get(/databases/$(database)/documents/allowed_users/$(request.auth.token.email.lower())).data.status == 'approved';
+    }
+
+    function isApprovedUser() {
+      return hasVerifiedEmail()
+        && exists(/databases/$(database)/documents/allowed_users/$(request.auth.token.email.lower()))
+        && get(/databases/$(database)/documents/allowed_users/$(request.auth.token.email.lower())).data.status == 'approved';
+    }
+
+    function isSignedIn() {
+      return isApprovedUser();
+    }
+
     function isVerified() {
-      return isSignedIn() && request.auth.token.email_verified == true;
+      return isApprovedUser();
     }
 
     function isValidId(id) {
       return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidEmailId(email) {
+      return email is string
+        && email.size() >= 3
+        && email.size() <= 320
+        && email == email.lower()
+        && email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
     }
 
     function incoming() {
@@ -62,6 +93,18 @@ service cloud.firestore {
     //   - totalBytes: int (required, 0..10737418240 [10 GiB], exact dropStorageBytes delta clamped to 11000000 per op)
     //   - lastDropId: string (required, 1..128 chars [a-zA-Z0-9_-], proves atomic drop create/delete)
     //   - updatedAt: timestamp (required, == request.time on create and update)
+    //
+    // Collection: /allowed_users/{email}
+    // Document ID: lowercase email (3..320 chars, ^[^@\s]+@[^@\s]+\.[^@\s]+$)
+    // Fields:
+    //   - email: string (required, immutable, == email doc ID)
+    //   - status: string (required, 'pending' | 'approved' | 'rejected')
+    //   - role: string (required, 'admin' | 'user')
+    //   - uid: string (optional, 1..128 chars)
+    //   - displayName: string (optional, <= 128 chars)
+    //   - requestedAt: timestamp (optional, == request.time on self-request)
+    //   - updatedAt: timestamp (required, == request.time on create and update)
+    //   - reviewedBy: string (optional, <= 320 chars)
     //
     // ===============================================================
 
@@ -125,6 +168,30 @@ service cloud.firestore {
         && data.lastDropId is string
         && isValidId(data.lastDropId)
         && data.updatedAt is timestamp;
+    }
+
+    function isValidAllowedUser(data, email) {
+      return data.keys().hasAll(['email', 'status', 'role', 'updatedAt'])
+        && data.keys().hasOnly([
+          'email',
+          'status',
+          'role',
+          'uid',
+          'displayName',
+          'requestedAt',
+          'updatedAt',
+          'reviewedBy'
+        ])
+        && isValidEmailId(email)
+        && data.email is string
+        && data.email == email
+        && data.status in ['pending', 'approved', 'rejected']
+        && data.role in ['admin', 'user']
+        && data.updatedAt is timestamp
+        && (!('uid' in data) || (data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128))
+        && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 128))
+        && (!('requestedAt' in data) || (data.requestedAt is timestamp))
+        && (!('reviewedBy' in data) || (data.reviewedBy is string && data.reviewedBy.size() <= 320));
     }
 
     function minInt(a, b) {
@@ -255,6 +322,42 @@ service cloud.firestore {
         );
 
       allow delete: if false;
+    }
+
+    // Email-Based Allowlist Collection
+    match /allowed_users/{email} {
+      allow get: if isAdmin()
+        || (hasVerifiedEmail() && request.auth.token.email.lower() == email);
+
+      allow list: if isAdmin();
+
+      allow create: if (
+        isAdmin()
+        && isValidAllowedUser(incoming(), email)
+        && incoming().updatedAt == request.time
+      ) || (
+        hasVerifiedEmail()
+        && request.auth.token.email.lower() == email
+        && isValidAllowedUser(incoming(), email)
+        && incoming().status == 'pending'
+        && incoming().role == 'user'
+        && (!('uid' in incoming()) || incoming().uid == request.auth.uid)
+        && incoming().requestedAt == request.time
+        && incoming().updatedAt == request.time
+        && !('reviewedBy' in incoming())
+      );
+
+      allow update: if isAdmin()
+        && isValidAllowedUser(incoming(), email)
+        && incoming().email == existing().email
+        && incoming().updatedAt == request.time
+        && (
+          request.auth.token.email.lower() != email
+          || (incoming().role == 'admin' && incoming().status == 'approved')
+        );
+
+      allow delete: if isAdmin()
+        && request.auth.token.email.lower() != email;
     }
   }
 }
