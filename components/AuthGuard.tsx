@@ -3,8 +3,14 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { Clock, LogOut, ShieldAlert } from 'lucide-react';
-import { auth, isFirebaseConfigured, signOutUser } from '@/lib/firebase';
+import { Clock, LogOut, RefreshCw, Send, ShieldAlert } from 'lucide-react';
+import {
+  auth,
+  isFirebaseConfigured,
+  reloadCurrentUser,
+  sendVerificationToCurrentUser,
+  signOutUser,
+} from '@/lib/firebase';
 import { resolveAuthGuardDecision, type AllowlistGateState } from '@/lib/auth-guard';
 import {
   requestAllowlistAccess,
@@ -52,7 +58,14 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
     isAdmin: boolean;
     error: string | null;
   } | null>(null);
+  const [actionBusy, setActionBusy] = useState<'resend' | 'refresh' | 'retry' | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
   const requestedUidsRef = useRef<Set<string>>(new Set());
+
+  const applyUserRefresh = (updated?: User | null) => {
+    if (updated) setUser(updated);
+    setUserVersion((v) => v + 1);
+  };
 
   useEffect(() => {
     if (!isFirebaseConfigured || !auth) return;
@@ -156,6 +169,59 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
     const isRejected = allowlistState === 'rejected';
     const isUnverified = allowlistState === 'unverified';
 
+    async function handleResendVerification() {
+      setActionMessage(null);
+      setActionBusy('resend');
+      try {
+        await sendVerificationToCurrentUser();
+        setActionMessage('ส่งอีเมลยืนยันแล้ว กรุณาตรวจสอบกล่องจดหมายของคุณ');
+      } catch (err) {
+        setActionMessage(err instanceof Error ? err.message : 'Failed to send verification email.');
+      } finally {
+        setActionBusy(null);
+      }
+    }
+
+    async function handleRefreshVerification() {
+      setActionMessage(null);
+      setActionBusy('refresh');
+      try {
+        const updated = await reloadCurrentUser();
+        applyUserRefresh(updated);
+      } catch (err) {
+        setActionMessage(err instanceof Error ? err.message : 'Failed to refresh session.');
+      } finally {
+        setActionBusy(null);
+      }
+    }
+
+    async function handleRetryAccessRequest() {
+      if (!user?.email) return;
+      setActionMessage(null);
+      setActionBusy('retry');
+      setSubscriptionState((prev) =>
+        prev && prev.uid === user.uid ? { ...prev, error: null } : prev
+      );
+      try {
+        await requestAllowlistAccess({
+          email: user.email,
+          uid: user.uid,
+          displayName: user.displayName,
+        });
+        applyUserRefresh();
+      } catch (err) {
+        setSubscriptionState({
+          uid: user.uid,
+          state: 'pending',
+          isAdmin: false,
+          error: err instanceof Error ? err.message : 'Failed to submit access request.',
+        });
+        applyUserRefresh();
+      } finally {
+        setActionBusy(null);
+      }
+    }
+
     return (
       <div className="min-h-screen bg-[#F5F2EB] text-[#181715] dark:bg-[#121110] dark:text-[#F3EFE8] flex items-center justify-center p-6">
         <div className="w-full max-w-md rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] p-6 sm:p-8 space-y-5">
@@ -189,6 +255,12 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
                 : 'ส่งคำขอเข้าใช้งานแล้ว กรุณารอผู้ดูแลระบบอนุมัติสิทธิ์ (หน้านี้จะปลดล็อกให้อัตโนมัติเมื่อได้รับการอนุมัติ)'}
           </p>
 
+          {actionMessage && (
+            <p className="text-xs text-[#3D3A35] dark:text-[#DFD9CE] bg-[#EFECE4] dark:bg-[#24221E] border border-[#DDD6C8] dark:border-[#34302A] rounded-lg px-3 py-2">
+              {actionMessage}
+            </p>
+          )}
+
           {requestError && (
             <p
               role="alert"
@@ -198,7 +270,42 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
             </p>
           )}
 
-          <div className="flex items-center justify-end gap-2 pt-1">
+          <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+            {isUnverified && (
+              <>
+                <button
+                  type="button"
+                  disabled={actionBusy !== null}
+                  onClick={() => void handleResendVerification()}
+                  className="h-9 px-3.5 rounded-lg border border-[#D8D1C4] dark:border-[#34302A] text-xs font-medium text-[#3D3A35] dark:text-[#DFD9CE] hover:bg-[#EFECE4] dark:hover:bg-[#25221E] transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Send className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Resend email</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={actionBusy !== null}
+                  onClick={() => void handleRefreshVerification()}
+                  className="h-9 px-3.5 rounded-lg bg-[#181715] hover:bg-[#2E2C28] dark:bg-[#F3EFE8] dark:hover:bg-[#E2DBD0] text-[#FCFBF8] dark:text-[#121110] text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Refresh</span>
+                </button>
+              </>
+            )}
+
+            {!isRejected && !isUnverified && requestError && (
+              <button
+                type="button"
+                disabled={actionBusy !== null}
+                onClick={() => void handleRetryAccessRequest()}
+                className="h-9 px-3.5 rounded-lg bg-[#181715] hover:bg-[#2E2C28] dark:bg-[#F3EFE8] dark:hover:bg-[#E2DBD0] text-[#FCFBF8] dark:text-[#121110] text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Retry</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => void signOutUser()}
@@ -220,10 +327,7 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
         authReady,
         isAdmin,
         userVersion,
-        refreshUser: (updated) => {
-          if (updated) setUser(updated);
-          setUserVersion((v) => v + 1);
-        },
+        refreshUser: applyUserRefresh,
       }}
     >
       {children}

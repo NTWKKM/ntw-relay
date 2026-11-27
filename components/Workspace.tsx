@@ -738,18 +738,6 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
             ·
           </span>
           <div className="flex items-center gap-1.5 min-w-0">
-            {isCloudSynced && isAdmin && (
-            <Link
-              href="/admin"
-              aria-label="Allowlist Admin"
-              title="Allowlist Admin"
-              className="h-8 px-2.5 rounded-lg text-xs font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#EAE5DB] dark:hover:bg-[#22201C] transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0"
-            >
-              <Shield className="w-3.5 h-3.5" aria-hidden="true" />
-              <span className="hidden sm:inline">Admin</span>
-            </Link>
-          )}
-
           {isCloudSynced ? (
               <>
                 <Cloud
