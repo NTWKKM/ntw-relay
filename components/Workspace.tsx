@@ -9,6 +9,7 @@ import React, {
   useSyncExternalStore,
 } from 'react';
 import Link from 'next/link';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   Cloud,
   CloudOff,
@@ -490,25 +491,154 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
 
   const storageBarFillClass =
     storageUsage.level === 'critical'
-      ? 'bg-[#DC2626] dark:bg-[#F87171]'
+      ? 'bg-error'
       : storageUsage.level === 'warning'
-        ? 'bg-[#D97706] dark:bg-[#FBBF24]'
-        : 'bg-[#181715] dark:bg-[#F3EFE8]';
+        ? 'bg-warning'
+        : 'bg-ink';
+
+  const storageScale =
+    storageReady && storageUsage.usedBytes > 0
+      ? Math.max(0.02, Math.min(1, storageUsage.percent / 100))
+      : 0;
 
   return (
-    <div className="min-h-screen bg-[#F5F2EB] text-[#181715] dark:bg-[#121110] dark:text-[#F3EFE8] flex flex-col">
-      <main className="flex-1 w-full max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-        <h1 className="sr-only">NTW Relay</h1>
+    <div className="min-h-dvh bg-desk text-ink flex flex-col">
+      {/* Sticky Top Utility Bar */}
+      <header className="sticky top-0 z-[var(--z-sticky-nav)] h-14 border-b border-rule bg-paper/95">
+        <div className="max-w-3xl mx-auto h-full px-4 sm:px-6 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="font-display text-lg font-semibold tracking-tight text-ink whitespace-nowrap shrink-0">
+              Relay
+            </span>
+
+            <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted min-w-0">
+              {isCloudSynced ? (
+                <>
+                  <Cloud className="w-3.5 h-3.5 text-success shrink-0" aria-hidden="true" />
+                  <span className="truncate max-w-[180px]">{firebaseUser?.email}</span>
+                </>
+              ) : (
+                <>
+                  <CloudOff className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                  <span className="whitespace-nowrap">Local sandbox</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <div
+              className="hidden md:flex items-center gap-2 pr-2 border-r border-rule text-xs text-muted tabular-nums"
+              title={
+                !isCloudSynced
+                  ? `Local sandbox usage: ${formatBytes(storageUsage.usedBytes)} / 1 GB`
+                  : storageReady
+                    ? `Shared project storage across all accounts: ${formatBytes(storageUsage.usedBytes)} / 1 GB`
+                    : globalStorageStatus === 'unavailable'
+                      ? 'Shared project storage usage unavailable'
+                      : 'Loading shared project storage usage'
+              }
+            >
+              <div
+                role="meter"
+                aria-label={isCloudSynced ? 'Shared storage usage across all accounts' : 'Local storage usage'}
+                aria-valuemin={0}
+                aria-valuemax={storageUsage.quotaBytes}
+                aria-valuenow={storageReady ? storageUsage.usedBytes : undefined}
+                aria-valuetext={
+                  storageReady
+                    ? `${formatBytes(storageUsage.usedBytes)} of 1 GB`
+                    : globalStorageStatus === 'unavailable'
+                      ? 'Storage usage unavailable'
+                      : 'Loading storage usage'
+                }
+                className="w-16 h-1.5 rounded-pill bg-paper-3 overflow-hidden"
+              >
+                <div
+                  className={`h-full w-full origin-left rounded-pill transition-transform duration-300 ${storageBarFillClass}`}
+                  style={{ transform: `scaleX(${storageScale})` }}
+                />
+              </div>
+              <span className="whitespace-nowrap">
+                {storageReady ? `${formatBytes(storageUsage.usedBytes)} / 1 GB` : '— / 1 GB'}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleOpenAppQr}
+              aria-label="Mobile QR"
+              className="coral-btn-ink h-8 px-2.5 sm:px-3 rounded-input text-xs font-medium flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <QrCode className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>
+                <span className="hidden sm:inline">Mobile </span>QR
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+              title={theme === 'light' ? 'Dark mode' : 'Light mode'}
+              className="h-8 w-8 rounded-input text-muted hover:text-ink hover:bg-paper-2 active:translate-y-px transition-colors flex items-center justify-center cursor-pointer shrink-0"
+            >
+              {theme === 'light' ? (
+                <Moon className="w-3.5 h-3.5" aria-hidden="true" />
+              ) : (
+                <Sun className="w-3.5 h-3.5" aria-hidden="true" />
+              )}
+            </button>
+
+            {isCloudSynced && isAdmin && (
+              <Link
+                href="/admin"
+                aria-label="Allowlist Admin"
+                title="Allowlist Admin"
+                className="h-8 px-2.5 rounded-input text-xs font-medium text-muted hover:text-ink hover:bg-paper-2 active:translate-y-px transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0"
+              >
+                <Shield className="w-3.5 h-3.5" aria-hidden="true" />
+                <span className="hidden sm:inline">Admin</span>
+              </Link>
+            )}
+
+            {isCloudSynced ? (
+              <button
+                type="button"
+                onClick={() => void signOutUser()}
+                aria-label="Sign out"
+                title="Sign out"
+                className="h-8 px-2.5 rounded-input text-xs font-medium text-muted hover:text-ink hover:bg-paper-2 active:translate-y-px transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+              >
+                <LogOut className="w-3.5 h-3.5 sm:hidden" aria-hidden="true" />
+                <span className="hidden sm:inline">Sign out</span>
+              </button>
+            ) : (
+              isFirebaseConfigured && (
+                <Link
+                  href="/login"
+                  className="h-8 px-2.5 rounded-input text-xs font-medium text-muted hover:text-ink hover:bg-paper-2 active:translate-y-px transition-colors flex items-center whitespace-nowrap shrink-0"
+                >
+                  Sign in
+                </Link>
+              )
+            )}
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-1 w-full max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+        <h1 className="sr-only">Relay</h1>
         {/* Email verification prompt (only shown when actually unverified) */}
         {isCloudSynced && firebaseUser && !firebaseUser.emailVerified && (
-          <div className="rounded-xl bg-[#FEF9EC] dark:bg-[#2A2010] border border-[#F3D9A4] dark:border-[#5C4318] px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs text-[#78350F] dark:text-[#FDE68A]">
+          <div className="rounded-card coral-stock border border-warning/40 px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs text-warning">
             <span className="font-medium">Verify your email to sync writes.</span>
             <div className="flex items-center gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => void handleSendVerification()}
                 disabled={verifyingEmail}
-                className="h-8 px-3 rounded-lg bg-[#92400E] hover:bg-[#78350F] text-[#FFFBEB] font-medium transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50"
+                className="coral-btn-ink h-8 px-3 rounded-input font-medium cursor-pointer whitespace-nowrap disabled:opacity-50"
               >
                 Send link
               </button>
@@ -516,7 +646,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
                 type="button"
                 onClick={() => void handleRefreshVerification()}
                 disabled={verifyingEmail}
-                className="h-8 px-3 rounded-lg bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E5C88B] dark:border-[#5C4318] text-[#78350F] dark:text-[#FDE68A] font-medium transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50"
+                className="coral-btn-secondary h-8 px-3 rounded-input font-medium cursor-pointer whitespace-nowrap disabled:opacity-50"
               >
                 Refresh
               </button>
@@ -535,10 +665,10 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
         {(syncNotice || syncError) && (
           <div
             role="status"
-            className={`rounded-lg px-3.5 py-2 text-xs flex items-center justify-between gap-3 border ${
+            className={`rounded-input px-3.5 py-2 text-xs flex items-center justify-between gap-3 border ${
               syncError
-                ? 'bg-[#FEF2F2] dark:bg-[#3A1717]/60 border-[#FECACA] dark:border-[#7F1D1D]/70 text-[#991B1B] dark:text-[#FCA5A5]'
-                : 'bg-[#FCFBF8] dark:bg-[#1A1917] border-[#E2DCD0] dark:border-[#2C2925] text-[#3D3A35] dark:text-[#D6CFC2]'
+                ? 'bg-paper-2 border-error/30 text-error'
+                : 'bg-cotton border-rule text-ink-2'
             }`}
           >
             <span className="break-words">{syncError || syncNotice}</span>
@@ -549,7 +679,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
                 setSyncError(null);
               }}
               aria-label="Dismiss notice"
-              className="h-7 w-7 rounded-md flex items-center justify-center text-[#787268] dark:text-[#8A8378] hover:text-[#181715] dark:hover:text-[#F3EFE8] shrink-0 cursor-pointer"
+              className="h-7 w-7 rounded-input flex items-center justify-center text-muted hover:text-ink shrink-0 cursor-pointer"
             >
               <X className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
@@ -559,11 +689,11 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
         {/* Feed Section */}
         <section aria-label="Drops stream" className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            {/* Segmented Filter Tabs */}
+            {/* Segmented Filter Tabs with Sliding Cotton Pill */}
             <div
               role="tablist"
               aria-label="Filter items"
-              className="flex items-center gap-0.5 p-1 rounded-xl bg-[#EBE6DC] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] overflow-x-auto"
+              className="coral-groove flex items-center gap-0.5 p-1 rounded-card overflow-x-auto"
             >
               {FILTER_TABS.map((t) => {
                 const active = filterTab === t.key;
@@ -574,14 +704,19 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
                     role="tab"
                     aria-selected={active}
                     onClick={() => setFilterTab(t.key)}
-                    className={`h-8 px-3 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
-                      active
-                        ? 'bg-[#FCFBF8] dark:bg-[#2A2723] text-[#181715] dark:text-[#F3EFE8] shadow-xs'
-                        : 'text-[#6B655C] dark:text-[#968F84] hover:text-[#181715] dark:hover:text-[#F3EFE8]'
+                    className={`relative h-8 px-3 rounded-input text-xs font-medium transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+                      active ? 'text-ink' : 'text-muted hover:text-ink'
                     }`}
                   >
-                    <span>{t.label}</span>
-                    <span className="font-mono text-[11px] text-[#787268] dark:text-[#8A8378] tabular-nums">
+                    {active && (
+                      <motion.span
+                        layoutId="relay-filter-pill"
+                        transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                        className="absolute inset-0 rounded-input bg-cotton shadow-card"
+                      />
+                    )}
+                    <span className="relative z-10">{t.label}</span>
+                    <span className="relative z-10 text-xs text-muted tabular-nums">
                       {counts[t.key]}
                     </span>
                   </button>
@@ -593,7 +728,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
             <div className="flex items-center gap-2 flex-1 sm:flex-initial sm:justify-end">
               <div className="relative flex-1 sm:w-52">
                 <Search
-                  className="w-3.5 h-3.5 text-[#787268] dark:text-[#8A8378] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                  className="w-3.5 h-3.5 text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
                   aria-hidden="true"
                 />
                 <label htmlFor="feed-search" className="sr-only">
@@ -605,14 +740,14 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search..."
-                  className="w-full h-9 rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] pl-8 pr-7 text-xs sm:text-sm text-[#181715] dark:text-[#F3EFE8] placeholder:text-[#8E877B] dark:placeholder:text-[#6E685F] focus:outline-none focus:border-[#1D4ED8] dark:focus:border-[#60A5FA] transition-colors"
+                  className="mwg-input w-full h-9 rounded-input bg-cotton border border-muted pl-8 pr-7 text-xs sm:text-sm text-ink placeholder:text-muted focus:border-focus transition-colors"
                 />
                 {searchQuery && (
                   <button
                     type="button"
                     onClick={() => setSearchQuery('')}
                     aria-label="Clear search"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-md flex items-center justify-center text-[#787268] hover:text-[#181715] dark:hover:text-[#F3EFE8] cursor-pointer"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-input flex items-center justify-center text-muted hover:text-ink cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" aria-hidden="true" />
                   </button>
@@ -624,7 +759,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
                 type="button"
                 popoverTarget="cleanup-popover"
                 disabled={items.length === 0 || cleaningUp}
-                className="mwg-popover-trigger h-9 px-3 rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] text-xs font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:border-[#C5BDB0] dark:hover:border-[#443F38] disabled:opacity-40 transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+                className="mwg-popover-trigger coral-btn-secondary h-9 px-3 rounded-card text-xs font-medium text-ink-2 disabled:opacity-40 flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
               >
                 <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>{cleaningUp ? 'Clearing...' : 'Clear'}</span>
@@ -638,15 +773,15 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
                 aria-label="Clear items"
                 className="mwg-popover"
               >
-                <div className="w-52 rounded-xl bg-[#FCFBF8] dark:bg-[#1E1C1A] border border-[#DDD6C8] dark:border-[#322E28] shadow-xl p-1.5 space-y-0.5">
+                <div className="w-52 rounded-card coral-stock p-1.5 space-y-0.5">
                   <button
                     type="button"
                     role="menuitem"
                     onClick={() => void handleCleanup('24h')}
-                    className="w-full px-3 py-2 rounded-lg text-left text-xs text-[#181715] dark:text-[#F3EFE8] hover:bg-[#F2EFE7] dark:hover:bg-[#2A2723] flex items-center justify-between gap-2 cursor-pointer"
+                    className="w-full px-3 py-2 rounded-input text-left text-xs text-ink hover:bg-paper-2 flex items-center justify-between gap-2 cursor-pointer"
                   >
                     <span>Older than 24h</span>
-                    <span className="font-mono text-[11px] text-[#787268] dark:text-[#8A8378] tabular-nums">
+                    <span className="text-xs text-muted tabular-nums">
                       {olderThan24hCount}
                     </span>
                   </button>
@@ -654,22 +789,22 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
                     type="button"
                     role="menuitem"
                     onClick={() => void handleCleanup('7d')}
-                    className="w-full px-3 py-2 rounded-lg text-left text-xs text-[#181715] dark:text-[#F3EFE8] hover:bg-[#F2EFE7] dark:hover:bg-[#2A2723] flex items-center justify-between gap-2 cursor-pointer"
+                    className="w-full px-3 py-2 rounded-input text-left text-xs text-ink hover:bg-paper-2 flex items-center justify-between gap-2 cursor-pointer"
                   >
                     <span>Older than 7d</span>
-                    <span className="font-mono text-[11px] text-[#787268] dark:text-[#8A8378] tabular-nums">
+                    <span className="text-xs text-muted tabular-nums">
                       {olderThan7dCount}
                     </span>
                   </button>
-                  <div className="my-1 border-t border-[#E2DCD0] dark:border-[#2C2925]" />
+                  <div className="my-1 border-t border-rule" />
                   <button
                     type="button"
                     role="menuitem"
                     onClick={() => void handleCleanup('all')}
-                    className="w-full px-3 py-2 rounded-lg text-left text-xs text-[#B91C1C] dark:text-[#F87171] hover:bg-[#FEF2F2] dark:hover:bg-[#3A1717]/60 flex items-center justify-between gap-2 cursor-pointer"
+                    className="w-full px-3 py-2 rounded-input text-left text-xs text-error hover:bg-paper-2 flex items-center justify-between gap-2 cursor-pointer"
                   >
                     <span>Clear all</span>
-                    <span className="font-mono text-[11px] opacity-75 tabular-nums">
+                    <span className="text-xs opacity-80 tabular-nums">
                       {items.length}
                     </span>
                   </button>
@@ -684,16 +819,16 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
               {[0, 1, 2].map((i) => (
                 <div
                   key={i}
-                  className="h-28 rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] animate-pulse"
+                  className="h-28 rounded-card coral-stock animate-pulse"
                 />
               ))}
             </div>
           ) : filteredItems.length === 0 ? (
-            <div className="rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] py-14 px-6 text-center space-y-2">
-              <p className="font-[family-name:var(--font-display)] text-base font-medium text-[#181715] dark:text-[#F3EFE8]">
+            <div className="rounded-card coral-stock py-14 px-6 text-center space-y-2">
+              <p className="font-display text-base font-semibold text-ink">
                 {items.length === 0 ? 'No drops yet' : 'No matches'}
               </p>
-              <p className="text-xs text-[#787268] dark:text-[#8A8378]">
+              <p className="text-xs text-muted">
                 {items.length === 0
                   ? 'Paste, type, or drop a file above.'
                   : 'Clear search or switch tabs.'}
@@ -705,7 +840,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
                     setFilterTab('all');
                     setSearchQuery('');
                   }}
-                  className="mt-2 h-8 px-3.5 rounded-lg bg-[#181715] dark:bg-[#F3EFE8] text-xs font-medium text-[#FCFBF8] dark:text-[#121110] hover:opacity-90 transition-opacity cursor-pointer"
+                  className="coral-btn-ink mt-2 h-8 px-3.5 rounded-input text-xs font-medium cursor-pointer"
                 >
                   Reset
                 </button>
@@ -713,154 +848,29 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
             </div>
           ) : (
             <div className="space-y-3" data-testid="drop-feed">
-              {filteredItems.map((item) => (
-                <DropCard
-                  key={item.id}
-                  item={item}
-                  onDelete={handleDeleteItem}
-                  onToggleCode={handleToggleCode}
-                  onOpenQr={handleOpenItemQr}
-                  onOpenImage={setLightboxItem}
-                />
-              ))}
+              <AnimatePresence mode="popLayout">
+                {filteredItems.map((item) => (
+                  <DropCard
+                    key={item.id}
+                    item={item}
+                    onDelete={handleDeleteItem}
+                    onToggleCode={handleToggleCode}
+                    onOpenQr={handleOpenItemQr}
+                    onOpenImage={setLightboxItem}
+                  />
+                ))}
+              </AnimatePresence>
             </div>
           )}
         </section>
       </main>
 
-      {/* Unified quiet footer: Brand, sync identity, limit, and workspace controls */}
-      <footer className="max-w-4xl w-full mx-auto px-4 sm:px-6 py-4 border-t border-[#E2DCD0]/70 dark:border-[#272420]/70 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs text-[#787268] dark:text-[#8A8378]">
-        <div className="flex items-center flex-wrap gap-x-2.5 gap-y-1 min-w-0">
-          <span className="font-[family-name:var(--font-display)] text-sm font-semibold tracking-tight text-[#181715] dark:text-[#F3EFE8] whitespace-nowrap shrink-0">
-            NTW Relay
-          </span>
-          <span className="text-[#D4CEC2] dark:text-[#3A3630] select-none" aria-hidden="true">
-            ·
-          </span>
-          <div className="flex items-center gap-1.5 min-w-0">
-          {isCloudSynced ? (
-              <>
-                <Cloud
-                  className="w-3.5 h-3.5 text-[#15803D] dark:text-[#4ADE80] shrink-0"
-                  aria-hidden="true"
-                />
-                <span className="truncate">{firebaseUser?.email}</span>
-              </>
-            ) : (
-              <>
-                <CloudOff className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                <span>Local sandbox</span>
-              </>
-            )}
-          </div>
-          <span className="text-[#D4CEC2] dark:text-[#3A3630] select-none" aria-hidden="true">
-            ·
-          </span>
-          <span className="font-mono text-[11px] shrink-0">Max 10 MB/file</span>
-          <span className="text-[#D4CEC2] dark:text-[#3A3630] select-none" aria-hidden="true">
-            ·
-          </span>
-          <div
-            className="flex items-center gap-2 shrink-0"
-            title={
-              !isCloudSynced
-                ? `Local sandbox usage: ${formatBytes(storageUsage.usedBytes)} / 1 GB`
-                : storageReady
-                  ? `Shared project storage across all accounts: ${formatBytes(storageUsage.usedBytes)} / 1 GB`
-                  : globalStorageStatus === 'unavailable'
-                    ? 'Shared project storage usage unavailable'
-                    : 'Loading shared project storage usage'
-            }
-          >
-            <div
-              role="meter"
-              aria-label={isCloudSynced ? 'Shared storage usage across all accounts' : 'Local storage usage'}
-              aria-valuemin={0}
-              aria-valuemax={storageUsage.quotaBytes}
-              aria-valuenow={storageReady ? storageUsage.usedBytes : undefined}
-              aria-valuetext={
-                storageReady
-                  ? `${formatBytes(storageUsage.usedBytes)} of 1 GB`
-                  : globalStorageStatus === 'unavailable'
-                    ? 'Storage usage unavailable'
-                    : 'Loading storage usage'
-              }
-              className="w-20 sm:w-24 h-1.5 rounded-full bg-[#E2DCD0] dark:bg-[#2C2925] overflow-hidden"
-            >
-              <div
-                className={`h-full rounded-full transition-[width] duration-300 ${storageBarFillClass}`}
-                style={{
-                  width: `${storageReady && storageUsage.usedBytes > 0 ? Math.max(2, storageUsage.percent) : 0}%`,
-                }}
-              />
-            </div>
-            <span className="font-mono text-[11px] tabular-nums whitespace-nowrap">
-              {storageReady ? `${formatBytes(storageUsage.usedBytes)} / 1 GB` : '— / 1 GB'}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={handleOpenAppQr}
-            aria-label="Mobile QR"
-            className="h-8 px-2.5 sm:px-3 rounded-lg bg-[#181715] hover:bg-[#2E2C28] dark:bg-[#F3EFE8] dark:hover:bg-[#E2DBD0] text-[#FCFBF8] dark:text-[#121110] text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
-          >
-            <QrCode className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>
-              <span className="hidden sm:inline">Mobile </span>QR
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={toggleTheme}
-            aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
-            title={theme === 'light' ? 'Dark mode' : 'Light mode'}
-            className="h-8 w-8 rounded-lg text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#EAE5DB] dark:hover:bg-[#22201C] transition-colors flex items-center justify-center cursor-pointer shrink-0"
-          >
-            {theme === 'light' ? (
-              <Moon className="w-3.5 h-3.5" aria-hidden="true" />
-            ) : (
-              <Sun className="w-3.5 h-3.5" aria-hidden="true" />
-            )}
-          </button>
-
-          {isCloudSynced && isAdmin && (
-            <Link
-              href="/admin"
-              aria-label="Allowlist Admin"
-              title="Allowlist Admin"
-              className="h-8 px-2.5 rounded-lg text-xs font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#EAE5DB] dark:hover:bg-[#22201C] transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0"
-            >
-              <Shield className="w-3.5 h-3.5" aria-hidden="true" />
-              <span className="hidden sm:inline">Admin</span>
-            </Link>
-          )}
-
-          {isCloudSynced ? (
-            <button
-              type="button"
-              onClick={() => void signOutUser()}
-              aria-label="Sign out"
-              title="Sign out"
-              className="h-8 px-2.5 rounded-lg text-xs font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#EAE5DB] dark:hover:bg-[#22201C] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
-            >
-              <LogOut className="w-3.5 h-3.5 sm:hidden" aria-hidden="true" />
-              <span className="hidden sm:inline">Sign out</span>
-            </button>
-          ) : (
-            isFirebaseConfigured && (
-              <Link
-                href="/login"
-                className="h-8 px-2.5 rounded-lg text-xs font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#EAE5DB] dark:hover:bg-[#22201C] transition-colors flex items-center whitespace-nowrap shrink-0"
-              >
-                Sign in
-              </Link>
-            )
-          )}
-        </div>
+      {/* Quiet status footer */}
+      <footer className="max-w-3xl w-full mx-auto px-4 sm:px-6 py-4 border-t border-rule flex items-center justify-between gap-3 text-xs text-muted">
+        <span className="whitespace-nowrap">Max 10 MB per file</span>
+        <span className="tabular-nums whitespace-nowrap md:hidden">
+          {storageReady ? `${formatBytes(storageUsage.usedBytes)} / 1 GB` : '— / 1 GB'}
+        </span>
       </footer>
 
       <QrModal data={qrModal} onClose={() => setQrModal(null)} />

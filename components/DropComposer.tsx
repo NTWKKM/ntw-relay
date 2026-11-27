@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -228,10 +229,10 @@ export function DropComposer({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         noValidate
-        className={`relative rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border transition-colors ${
+        className={`relative rounded-card coral-stock border transition-colors duration-150 ${
           isDragging
-            ? 'border-[#1D4ED8] dark:border-[#60A5FA] bg-[#1D4ED8]/[0.03] dark:bg-[#60A5FA]/[0.06]'
-            : 'border-[#E2DCD0] dark:border-[#2C2925] focus-within:border-[#BFB7A8] dark:focus-within:border-[#454039]'
+            ? 'border-accent-2'
+            : 'border-transparent focus-within:border-rule-2'
         }`}
       >
         <input
@@ -245,7 +246,7 @@ export function DropComposer({
           aria-label="Attach files or images"
         />
 
-        <div className="px-4 sm:px-5 pt-4 pb-3">
+        <div className="p-3 sm:p-4">
           <label htmlFor="drop-text-input" className="sr-only">
             Drop text, links, or code
           </label>
@@ -261,11 +262,11 @@ export function DropComposer({
             disabled={disabled || sending}
             placeholder="Paste text, link, code, or drop files..."
             rows={3}
-            className="mwg-autogrow w-full resize-none bg-transparent text-[15px] text-[#181715] dark:text-[#F3EFE8] placeholder:text-[#8E877B] dark:placeholder:text-[#6E685F] focus:outline-none leading-[1.6]"
+            className="mwg-autogrow w-full resize-none rounded-input bg-paper border border-muted px-3.5 py-2.5 text-[15px] text-ink placeholder:text-muted focus:outline-none focus:border-focus transition-colors leading-[1.6]"
           />
         </div>
 
-        <div className="px-3.5 sm:px-4 py-2.5 border-t border-[#ECE7DD] dark:border-[#272420] flex items-center justify-between gap-2">
+        <div className="px-3.5 sm:px-4 py-2.5 border-t border-rule flex items-center justify-between gap-2">
           <div className="flex items-center gap-1">
             <button
               type="button"
@@ -273,7 +274,7 @@ export function DropComposer({
               disabled={disabled || sending}
               aria-label="Attach files up to 10 MB"
               title="Attach files (max 10 MB)"
-              className="h-9 px-2.5 rounded-lg text-xs font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#F2EFE7] dark:hover:bg-[#25221E] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+              className="h-9 px-2.5 rounded-input text-xs font-medium text-muted hover:text-ink hover:bg-paper-2 active:translate-y-px transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
             >
               <Paperclip className="w-3.5 h-3.5" aria-hidden="true" />
               <span>Attach</span>
@@ -284,27 +285,27 @@ export function DropComposer({
               onClick={handlePasteButton}
               disabled={disabled || sending}
               aria-label="Paste from clipboard"
-              className="h-9 px-2.5 rounded-lg text-xs font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#F2EFE7] dark:hover:bg-[#25221E] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+              className="h-9 px-2.5 rounded-input text-xs font-medium text-muted hover:text-ink hover:bg-paper-2 active:translate-y-px transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
             >
               <ClipboardPaste className="w-3.5 h-3.5" aria-hidden="true" />
               <span>Paste</span>
             </button>
 
             {text.length > 0 && (
-              <span className="font-mono text-[11px] text-[#787268] dark:text-[#8A8378] tabular-nums pl-1.5 hidden sm:inline">
+              <span className="text-xs text-muted tabular-nums pl-1.5 hidden sm:inline">
                 {text.length.toLocaleString()}
               </span>
             )}
           </div>
 
           <div className="flex items-center gap-2.5">
-            <kbd className="hidden sm:inline font-mono text-[11px] text-[#8E877B] dark:text-[#777066]">
+            <kbd className="hidden sm:inline font-outlier text-xs text-muted">
               ⌘↵
             </kbd>
             <button
               type="submit"
               disabled={disabled || sending}
-              className="h-9 px-4 rounded-lg bg-[#181715] hover:bg-[#2E2C28] dark:bg-[#F3EFE8] dark:hover:bg-[#E2DBD0] disabled:opacity-50 text-[#FCFBF8] dark:text-[#121110] text-xs sm:text-sm font-medium transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+              className="coral-btn-ink h-9 px-4 rounded-stock disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm font-medium flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
             >
               <Send className="w-3.5 h-3.5" aria-hidden="true" />
               <span>{sending ? 'Sending...' : 'Send'}</span>
@@ -313,19 +314,27 @@ export function DropComposer({
         </div>
 
         {/* Active Drag Overlay */}
-        {isDragging && (
-          <div className="pointer-events-none absolute inset-0 rounded-xl bg-[#FCFBF8]/92 dark:bg-[#1A1917]/92 flex items-center justify-center gap-2 text-sm font-medium text-[#1D4ED8] dark:text-[#60A5FA]">
-            <FileUp className="w-4 h-4" aria-hidden="true" />
-            <span>Drop to upload</span>
-          </div>
-        )}
+        <AnimatePresence>
+          {isDragging && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.985 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.985 }}
+              transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+              className="pointer-events-none absolute inset-1 rounded-input border-2 border-dashed border-accent-2 bg-cotton/95 flex items-center justify-center gap-2 text-sm font-medium text-accent-2"
+            >
+              <FileUp className="w-4 h-4" aria-hidden="true" />
+              <span>Drop to upload</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </form>
 
       {/* Inline Validation Error */}
       {error && (
         <div
           role="alert"
-          className="rounded-lg bg-[#FEF2F2] dark:bg-[#3A1717]/60 border border-[#FECACA] dark:border-[#7F1D1D]/70 px-3.5 py-2 text-xs text-[#991B1B] dark:text-[#FCA5A5] flex items-center gap-2"
+          className="rounded-input bg-paper-2 border border-error/30 px-3.5 py-2 text-xs text-error flex items-center gap-2"
         >
           <AlertCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
           <span>{error}</span>
@@ -336,46 +345,46 @@ export function DropComposer({
       {uploads.length > 0 && (
         <div
           aria-live="polite"
-          className="rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] divide-y divide-[#ECE7DD] dark:divide-[#272420]"
+          className="rounded-card coral-stock divide-y divide-rule"
         >
           {uploads.map((task) => (
             <div key={task.id} className="px-4 py-3 space-y-2">
               <div className="flex items-center justify-between gap-3 text-xs">
                 <div className="flex items-center gap-2 min-w-0">
                   {task.status === 'done' ? (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-[#15803D] dark:text-[#4ADE80] shrink-0" aria-hidden="true" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-success shrink-0" aria-hidden="true" />
                   ) : task.status === 'error' ? (
-                    <AlertCircle className="w-3.5 h-3.5 text-[#B91C1C] dark:text-[#F87171] shrink-0" aria-hidden="true" />
+                    <AlertCircle className="w-3.5 h-3.5 text-error shrink-0" aria-hidden="true" />
                   ) : null}
-                  <span className="font-medium text-[#181715] dark:text-[#F3EFE8] truncate">
+                  <span className="font-medium text-ink truncate">
                     {task.fileName}
                   </span>
                 </div>
-                <div className="font-mono text-[11px] text-[#6B655C] dark:text-[#968F84] tabular-nums shrink-0">
+                <div className="text-xs text-muted tabular-nums shrink-0 flex items-center gap-2">
                   {task.status === 'error' ? (
-                    <span className="text-[#B91C1C] dark:text-[#F87171]">
+                    <span className="text-error">
                       {task.errorMessage || 'Failed'}
                     </span>
                   ) : (
                     <>
-                      {formatBytes(task.fileSize)} ·{' '}
-                      <span className="text-[#181715] dark:text-[#F3EFE8] font-medium">
+                      <span>{formatBytes(task.fileSize)}</span>
+                      <span className="text-ink font-medium">
                         {task.progress}%
                       </span>
                     </>
                   )}
                 </div>
               </div>
-              <div className="h-1 w-full rounded-full bg-[#EAE5DB] dark:bg-[#272420] overflow-hidden">
+              <div className="h-1 w-full rounded-pill bg-paper-2 overflow-hidden">
                 <div
-                  className={`h-full transition-all duration-150 ${
+                  className={`h-full w-full origin-left transition-transform duration-150 ${
                     task.status === 'error'
-                      ? 'bg-[#B91C1C] dark:bg-[#F87171]'
+                      ? 'bg-error'
                       : task.status === 'done'
-                        ? 'bg-[#15803D] dark:bg-[#4ADE80]'
-                        : 'bg-[#1D4ED8] dark:bg-[#60A5FA]'
+                        ? 'bg-success'
+                        : 'bg-accent-2'
                   }`}
-                  style={{ width: `${task.progress}%` }}
+                  style={{ transform: `scaleX(${Math.max(0, Math.min(100, task.progress)) / 100})` }}
                 />
               </div>
             </div>

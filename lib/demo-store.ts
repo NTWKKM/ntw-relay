@@ -15,7 +15,7 @@ function createDemoScreenshotDataUrl(): string {
       <line x1="0" y1="88" x2="1200" y2="88"/>
       <line x1="360" y1="88" x2="360" y2="750"/>
     </g>
-    <text x="48" y="54" fill="#181715" font-family="Georgia, serif" font-size="22" font-weight="600">NTW Relay — Cross-Device Handoff Diagram</text>
+    <text x="48" y="54" fill="#181715" font-family="Georgia, serif" font-size="22" font-weight="600">Relay — Cross-Device Handoff Diagram</text>
     <text x="980" y="52" fill="#787268" font-family="ui-monospace, monospace" font-size="14">SHEET 01 / ARCH</text>
 
     <rect x="48" y="136" width="264" height="58" rx="8" fill="#181715"/>
@@ -66,7 +66,7 @@ export function createInitialDemoItems(nowMs: number = Date.now()): DropItem[] {
       ownerId: 'local_demo',
       type: 'text',
       content:
-        'เอกสารอ้างอิง Firestore Security Rules สำหรับ NTW Relay: https://firebase.google.com/docs/firestore/security/get-started',
+        'Firestore Security Rules reference for Relay: https://firebase.google.com/docs/firestore/security/get-started',
       isCode: false,
       createdAtMs: nowMs - 4 * min,
       isLocalOnly: true,
@@ -75,7 +75,7 @@ export function createInitialDemoItems(nowMs: number = Date.now()): DropItem[] {
       id: 'drop_demo_img_2',
       ownerId: 'local_demo',
       type: 'image',
-      content: 'NTW Relay sync architecture reference diagram',
+      content: 'Relay sync architecture reference diagram',
       fileName: 'relay-architecture.svg',
       fileSize: 2840,
       mimeType: 'image/svg+xml',
@@ -96,12 +96,12 @@ export function createInitialDemoItems(nowMs: number = Date.now()): DropItem[] {
       id: 'drop_demo_file_4',
       ownerId: 'local_demo',
       type: 'file',
-      content: 'Sample UTF-8 Thai filename document',
-      fileName: 'สรุปแผนงาน_NTW_Relay_2569.txt',
+      content: 'Sample UTF-8 text document',
+      fileName: 'Relay_Summary_2026.txt',
       fileSize: 4280,
       mimeType: 'text/plain;charset=utf-8',
       downloadUrl: `data:text/plain;charset=utf-8,${encodeURIComponent(
-        'NTW Relay — Sample UTF-8 Document\nชื่อไฟล์ภาษาไทยรองรับ UTF-8 เต็มรูปแบบ\n'
+        'Relay — Sample UTF-8 Document\nFull UTF-8 filename and content support.\n'
       )}`,
       createdAtMs: nowMs - 30 * hour, // > 24h so "Clear Old (> 24h)" has a realistic target
       isLocalOnly: true,

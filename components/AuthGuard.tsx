@@ -165,10 +165,10 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
       <div
         role="status"
         aria-label={decision === 'redirect_login' ? 'Redirecting to login' : 'Checking authentication'}
-        className="min-h-screen bg-[#F5F2EB] text-[#181715] dark:bg-[#121110] dark:text-[#F3EFE8] flex flex-col items-center justify-center gap-3 p-6"
+        className="min-h-dvh bg-desk text-ink flex flex-col items-center justify-center gap-3 p-6"
       >
-        <div className="w-7 h-7 rounded-full border-2 border-[#DDD6C8] dark:border-[#2C2925] border-t-[#181715] dark:border-t-[#F3EFE8] animate-spin" />
-        <p className="text-xs text-[#787268] dark:text-[#8A8378]">
+        <div className="w-7 h-7 rounded-full border-2 border-rule-2 border-t-ink animate-spin keep-motion" />
+        <p className="text-xs text-muted">
           {decision === 'redirect_login' ? 'Redirecting to sign in...' : 'Verifying session...'}
         </p>
       </div>
@@ -184,7 +184,7 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
       setActionBusy('resend');
       try {
         await sendVerificationToCurrentUser();
-        setActionMessage('ส่งอีเมลยืนยันแล้ว กรุณาตรวจสอบกล่องจดหมายของคุณ');
+        setActionMessage('Verification email sent. Please check your inbox.');
       } catch (err) {
         setActionMessage(err instanceof Error ? err.message : 'Failed to send verification email.');
       } finally {
@@ -238,40 +238,40 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
     }
 
     return (
-      <div className="min-h-screen bg-[#F5F2EB] text-[#181715] dark:bg-[#121110] dark:text-[#F3EFE8] flex items-center justify-center p-6">
-        <div className="w-full max-w-md rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] p-6 sm:p-8 space-y-5">
+      <div className="min-h-dvh bg-desk text-ink flex items-center justify-center p-6">
+        <div className="w-full max-w-md rounded-card coral-stock p-6 sm:p-8 space-y-5">
           <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#EAE5DB] dark:bg-[#24221E] flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-input bg-paper-2 flex items-center justify-center shrink-0">
               {isRejected || isUnverified ? (
-                <ShieldAlert className="w-4 h-4 text-[#B42318] dark:text-[#F97066]" aria-hidden="true" />
+                <ShieldAlert className="w-4 h-4 text-error" aria-hidden="true" />
               ) : (
-                <Clock className="w-4 h-4 text-[#8A6D3B] dark:text-[#E0B973]" aria-hidden="true" />
+                <Clock className="w-4 h-4 text-warning" aria-hidden="true" />
               )}
             </div>
             <div className="space-y-1 min-w-0">
-              <h1 className="font-[family-name:var(--font-display)] text-lg font-medium tracking-tight">
+              <h1 className="font-display text-lg font-semibold tracking-tight text-ink">
                 {isRejected
                   ? 'Access denied'
                   : isUnverified
                     ? 'Email not verified'
                     : 'Waiting for approval'}
               </h1>
-              <p className="text-xs text-[#6B655C] dark:text-[#968F84] break-all">
-                Signed in as <span className="font-mono text-[#181715] dark:text-[#F3EFE8]">{user?.email}</span>
+              <p className="text-xs text-muted break-all">
+                Signed in as <span className="font-outlier text-ink">{user?.email}</span>
               </p>
             </div>
           </div>
 
-          <p className="text-sm text-[#4F4A42] dark:text-[#B9B2A6] leading-relaxed">
+          <p className="text-sm text-ink-2 leading-relaxed">
             {isRejected
-              ? 'บัญชีนี้ไม่ได้รับอนุญาตให้เข้าใช้งานระบบ กรุณาติดต่อผู้ดูแลระบบ'
+              ? 'This account is not authorized to access Relay. Please contact an administrator.'
               : isUnverified
-                ? 'กรุณายืนยันอีเมลของบัญชีก่อนเข้าใช้งาน'
-                : 'ส่งคำขอเข้าใช้งานแล้ว กรุณารอผู้ดูแลระบบอนุมัติสิทธิ์ (หน้านี้จะปลดล็อกให้อัตโนมัติเมื่อได้รับการอนุมัติ)'}
+                ? 'Please verify your email address before continuing.'
+                : 'Access request submitted. Please wait for an administrator to approve your account (this page unlocks automatically once approved).'}
           </p>
 
           {actionMessage && (
-            <p className="text-xs text-[#3D3A35] dark:text-[#DFD9CE] bg-[#EFECE4] dark:bg-[#24221E] border border-[#DDD6C8] dark:border-[#34302A] rounded-lg px-3 py-2">
+            <p className="text-xs text-ink-2 bg-paper-2 border border-rule rounded-input px-3 py-2">
               {actionMessage}
             </p>
           )}
@@ -279,7 +279,7 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
           {requestError && (
             <p
               role="alert"
-              className="text-xs text-[#B42318] dark:text-[#F97066] bg-[#FEF3F2] dark:bg-[#2A1716] border border-[#FECDCA] dark:border-[#552623] rounded-lg px-3 py-2"
+              className="text-xs text-error bg-paper-2 border border-error/30 rounded-input px-3 py-2"
             >
               {requestError}
             </p>
@@ -292,7 +292,7 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
                   type="button"
                   disabled={actionBusy !== null}
                   onClick={() => void handleResendVerification()}
-                  className="h-9 px-3.5 rounded-lg border border-[#D8D1C4] dark:border-[#34302A] text-xs font-medium text-[#3D3A35] dark:text-[#DFD9CE] hover:bg-[#EFECE4] dark:hover:bg-[#25221E] transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  className="coral-btn-secondary h-9 px-3.5 rounded-input text-xs font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Send className="w-3.5 h-3.5" aria-hidden="true" />
                   <span>Resend email</span>
@@ -301,7 +301,7 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
                   type="button"
                   disabled={actionBusy !== null}
                   onClick={() => void handleRefreshVerification()}
-                  className="h-9 px-3.5 rounded-lg bg-[#181715] hover:bg-[#2E2C28] dark:bg-[#F3EFE8] dark:hover:bg-[#E2DBD0] text-[#FCFBF8] dark:text-[#121110] text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  className="coral-btn-ink h-9 px-3.5 rounded-input text-xs font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
                   <span>Refresh</span>
@@ -314,7 +314,7 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
                 type="button"
                 disabled={actionBusy !== null}
                 onClick={() => void handleRetryAccessRequest()}
-                className="h-9 px-3.5 rounded-lg bg-[#181715] hover:bg-[#2E2C28] dark:bg-[#F3EFE8] dark:hover:bg-[#E2DBD0] text-[#FCFBF8] dark:text-[#121110] text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="coral-btn-ink h-9 px-3.5 rounded-input text-xs font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>Retry</span>
@@ -324,7 +324,7 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
             <button
               type="button"
               onClick={() => void signOutUser()}
-              className="h-9 px-3.5 rounded-lg border border-[#D8D1C4] dark:border-[#34302A] text-xs font-medium text-[#3D3A35] dark:text-[#DFD9CE] hover:bg-[#EFECE4] dark:hover:bg-[#25221E] transition-colors flex items-center gap-1.5 cursor-pointer"
+              className="coral-btn-secondary h-9 px-3.5 rounded-input text-xs font-medium text-ink-2 flex items-center gap-1.5 cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
               <span>Sign out</span>

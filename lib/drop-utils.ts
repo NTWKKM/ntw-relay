@@ -401,14 +401,14 @@ export function getQrPayload(
       return {
         value: appUrl,
         label: item.fileName
-          ? `Open NTW Relay · sign in to download ${item.fileName}`
-          : 'Open NTW Relay · sign in to download',
+          ? `Open Relay: sign in to download ${item.fileName}`
+          : 'Open Relay: sign in to download',
       };
     }
     return {
       value: null,
       label: item.fileName ?? 'Cloud file',
-      unavailableReason: 'Open NTW Relay on your phone and sign in to download this file.',
+      unavailableReason: 'Open Relay on your phone and sign in to download this file.',
     };
   }
 

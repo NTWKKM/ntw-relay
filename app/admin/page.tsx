@@ -39,17 +39,14 @@ const STATUS_LABEL: Record<AllowlistStatus, string> = {
 };
 
 const STATUS_BADGE_CLASS: Record<AllowlistStatus, string> = {
-  pending:
-    'bg-[#FEF6E7] text-[#8A5A10] border-[#F3D9A4] dark:bg-[#2C2212] dark:text-[#E7B965] dark:border-[#4D3B1A]',
-  approved:
-    'bg-[#ECFDF3] text-[#067647] border-[#ABEFC6] dark:bg-[#10281B] dark:text-[#6CE9A6] dark:border-[#1E4D33]',
-  rejected:
-    'bg-[#FEF3F2] text-[#B42318] border-[#FECDCA] dark:bg-[#2A1716] dark:text-[#F97066] dark:border-[#552623]',
+  pending: 'bg-paper-2 text-warning border-rule',
+  approved: 'bg-paper-2 text-success border-rule',
+  rejected: 'bg-paper-2 text-error border-rule',
 };
 
 function formatDateTime(ms?: number): string {
   if (!ms) return '—';
-  return new Intl.DateTimeFormat('th-TH', {
+  return new Intl.DateTimeFormat('en-US', {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(ms));
@@ -92,17 +89,17 @@ function AdminAllowlistContent() {
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen bg-[#F5F2EB] text-[#181715] dark:bg-[#121110] dark:text-[#F3EFE8] flex items-center justify-center p-6">
-        <div className="w-full max-w-md rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] p-6 space-y-4">
-          <h1 className="font-[family-name:var(--font-display)] text-lg font-medium">
+      <div className="min-h-dvh bg-desk text-ink flex items-center justify-center p-6">
+        <div className="w-full max-w-md rounded-card coral-stock p-6 space-y-4">
+          <h1 className="font-display text-lg font-semibold">
             Admin access only
           </h1>
-          <p className="text-sm text-[#6B655C] dark:text-[#968F84]">
-            หน้านี้เปิดให้เฉพาะบัญชีผู้ดูแลระบบ (Admin) เท่านั้น
+          <p className="text-sm text-muted">
+            This page is restricted to administrator accounts.
           </p>
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-[#181715] dark:bg-[#F3EFE8] text-[#FCFBF8] dark:text-[#121110] text-xs font-medium"
+            className="coral-btn-ink inline-flex items-center gap-1.5 h-9 px-3.5 rounded-input text-xs font-medium"
           >
             <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Back to Workspace</span>
@@ -159,19 +156,19 @@ function AdminAllowlistContent() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F2EB] text-[#181715] dark:bg-[#121110] dark:text-[#F3EFE8] flex flex-col">
-      <header className="h-14 border-b border-[#E2DCD0] dark:border-[#272420]">
+    <div className="min-h-dvh bg-desk text-ink flex flex-col">
+      <header className="h-14 border-b border-rule bg-paper/80">
         <div className="max-w-4xl mx-auto h-full px-4 sm:px-6 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <Link
               href="/"
-              className="h-8 px-2.5 rounded-lg text-xs font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#EAE5DB] dark:hover:bg-[#22201C] transition-colors flex items-center gap-1.5 whitespace-nowrap"
+              className="h-8 px-2.5 rounded-input text-xs font-medium text-muted hover:text-ink hover:bg-paper-2 active:translate-y-px transition-colors flex items-center gap-1.5 whitespace-nowrap"
             >
               <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />
               <span>Workspace</span>
             </Link>
-            <span className="text-[#CFC8BC] dark:text-[#3A3630]">/</span>
-            <span className="font-[family-name:var(--font-display)] text-sm font-semibold tracking-tight flex items-center gap-1.5 whitespace-nowrap">
+            <span className="text-rule-2">/</span>
+            <span className="font-display text-sm font-semibold tracking-tight flex items-center gap-1.5 whitespace-nowrap">
               <Shield className="w-3.5 h-3.5" aria-hidden="true" />
               <span>Allowlist Admin</span>
             </span>
@@ -182,7 +179,7 @@ function AdminAllowlistContent() {
               type="button"
               onClick={toggleTheme}
               aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
-              className="h-8 w-8 rounded-lg text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#EAE5DB] dark:hover:bg-[#22201C] transition-colors flex items-center justify-center cursor-pointer"
+              className="h-8 w-8 rounded-input text-muted hover:text-ink hover:bg-paper-2 active:translate-y-px transition-colors flex items-center justify-center cursor-pointer"
             >
               {theme === 'light' ? (
                 <Moon className="w-4 h-4" aria-hidden="true" />
@@ -194,7 +191,7 @@ function AdminAllowlistContent() {
             <button
               type="button"
               onClick={() => void signOutUser()}
-              className="h-8 px-2.5 rounded-lg text-xs font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#EAE5DB] dark:hover:bg-[#22201C] transition-colors flex items-center gap-1.5 cursor-pointer"
+              className="h-8 px-2.5 rounded-input text-xs font-medium text-muted hover:text-ink hover:bg-paper-2 active:translate-y-px transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5 sm:hidden" aria-hidden="true" />
               <span className="hidden sm:inline">Sign out</span>
@@ -206,24 +203,24 @@ function AdminAllowlistContent() {
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-8 space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="space-y-1">
-            <h1 className="font-[family-name:var(--font-display)] text-2xl font-medium tracking-tight">
+            <h1 className="font-display text-2xl font-semibold tracking-tight">
               User Access Allowlist
             </h1>
-            <p className="text-sm text-[#6B655C] dark:text-[#968F84]">
-              อนุมัติผู้ใช้ใหม่ที่เข้าผ่าน Google Login หรือเพิ่มอีเมลล่วงหน้า
+            <p className="text-sm text-muted">
+              Approve users who signed in with Google or pre-approve emails below.
             </p>
           </div>
 
           <div className="flex items-center gap-2 text-xs">
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-[#F3D9A4] bg-[#FEF6E7] text-[#8A5A10] dark:bg-[#2C2212] dark:text-[#E7B965] dark:border-[#4D3B1A]">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-pill border border-rule bg-paper-2 text-warning">
               <Clock className="w-3 h-3" aria-hidden="true" />
               Pending: {counts.pending}
             </span>
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-[#ABEFC6] bg-[#ECFDF3] text-[#067647] dark:bg-[#10281B] dark:text-[#6CE9A6] dark:border-[#1E4D33]">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-pill border border-rule bg-paper-2 text-success">
               <UserCheck className="w-3 h-3" aria-hidden="true" />
               Approved: {counts.approved}
             </span>
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-[#E2DCD0] bg-[#FCFBF8] text-[#6B655C] dark:bg-[#1A1917] dark:text-[#968F84] dark:border-[#2C2925]">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-pill border border-rule bg-cotton text-muted">
               <UserX className="w-3 h-3" aria-hidden="true" />
               Rejected: {counts.rejected}
             </span>
@@ -233,7 +230,7 @@ function AdminAllowlistContent() {
         {/* Add / Pre-approve form */}
         <form
           onSubmit={handleAddPreapproved}
-          className="rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] p-4 flex flex-col sm:flex-row gap-3"
+          className="rounded-card coral-stock p-4 flex flex-col sm:flex-row gap-3"
         >
           <input
             type="email"
@@ -242,13 +239,13 @@ function AdminAllowlistContent() {
               setNewEmail(e.target.value);
               if (error) setError(null);
             }}
-            placeholder="Add email to pre-approve (e.g. friend@gmail.com)"
-            className="flex-1 h-9 px-3 rounded-lg bg-[#F5F2EB] dark:bg-[#121110] border border-[#DDD6C8] dark:border-[#2E2A24] text-sm placeholder:text-[#9A9388] focus:outline-none focus:border-[#181715] dark:focus:border-[#F3EFE8]"
+            placeholder="Add email to pre-approve (e.g. friend@example.com)"
+            className="mwg-input flex-1 h-9 px-3 rounded-input bg-paper border border-rule-2 text-sm text-ink placeholder:text-muted focus:border-focus transition-colors"
           />
           <button
             type="submit"
             disabled={busyKey !== null || !newEmail.trim()}
-            className="h-9 px-4 rounded-lg bg-[#181715] hover:bg-[#2E2C28] dark:bg-[#F3EFE8] dark:hover:bg-[#E2DBD0] text-[#FCFBF8] dark:text-[#121110] text-xs font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+            className="coral-btn-ink h-9 px-4 rounded-input text-xs font-medium flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
           >
             <Plus className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Add &amp; Approve</span>
@@ -258,21 +255,21 @@ function AdminAllowlistContent() {
         {error && (
           <div
             role="alert"
-            className="rounded-lg border border-[#FECDCA] bg-[#FEF3F2] text-[#B42318] dark:border-[#552623] dark:bg-[#2A1716] dark:text-[#F97066] px-4 py-2.5 text-xs"
+            className="rounded-input border border-error/30 bg-paper-2 text-error px-4 py-2.5 text-xs"
           >
             {error}
           </div>
         )}
 
         {/* List */}
-        <div className="rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] divide-y divide-[#EAE5DB] dark:divide-[#272420]">
+        <div className="rounded-card coral-stock divide-y divide-rule">
           {loading ? (
             <div className="p-8 flex justify-center">
-              <div className="w-6 h-6 rounded-full border-2 border-[#DDD6C8] dark:border-[#2C2925] border-t-[#181715] dark:border-t-[#F3EFE8] animate-spin" />
+              <div className="w-6 h-6 rounded-full border-2 border-rule-2 border-t-ink animate-spin keep-motion" />
             </div>
           ) : users.length === 0 ? (
-            <div className="p-8 text-center text-sm text-[#6B655C] dark:text-[#968F84]">
-              ยังไม่มีรายการใน Allowlist
+            <div className="p-8 text-center text-sm text-muted">
+              No entries in the allowlist yet.
             </div>
           ) : (
             users.map((item) => {
@@ -286,22 +283,22 @@ function AdminAllowlistContent() {
                 >
                   <div className="space-y-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-sm font-medium break-all">
+                      <span className="font-outlier text-sm font-medium break-all text-ink">
                         {item.email}
                       </span>
                       <span
-                        className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${STATUS_BADGE_CLASS[item.status]}`}
+                        className={`text-xs font-medium px-2 py-0.5 rounded-pill border ${STATUS_BADGE_CLASS[item.status]}`}
                       >
                         {STATUS_LABEL[item.status]}
                       </span>
                       {item.role === 'admin' && (
-                        <span className="text-[11px] font-medium px-2 py-0.5 rounded-full border border-[#D8D1C4] dark:border-[#34302A] text-[#5D5850] dark:text-[#A8A196]">
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-pill border border-rule text-muted">
                           Admin
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-[#6B655C] dark:text-[#968F84]">
-                      {item.displayName ? `${item.displayName} · ` : ''}
+                    <p className="text-xs text-muted">
+                      {item.displayName ? `${item.displayName}, ` : ''}
                       Updated {formatDateTime(item.updatedAt)}
                     </p>
                   </div>
@@ -313,7 +310,7 @@ function AdminAllowlistContent() {
                           type="button"
                           disabled={isRowBusy}
                           onClick={() => void handleStatusChange(item.email, 'approved')}
-                          className="h-8 px-3 rounded-lg bg-[#181715] hover:bg-[#2E2C28] dark:bg-[#F3EFE8] dark:hover:bg-[#E2DBD0] text-[#FCFBF8] dark:text-[#121110] text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                          className="coral-btn-ink h-8 px-3 rounded-input text-xs font-medium flex items-center gap-1 cursor-pointer disabled:opacity-50"
                         >
                           <Check className="w-3.5 h-3.5" aria-hidden="true" />
                           <span>Approve</span>
@@ -324,7 +321,7 @@ function AdminAllowlistContent() {
                           type="button"
                           disabled={isRowBusy}
                           onClick={() => void handleStatusChange(item.email, 'rejected')}
-                          className="h-8 px-3 rounded-lg border border-[#D8D1C4] dark:border-[#34302A] text-xs font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#B42318] dark:hover:text-[#F97066] hover:bg-[#FEF3F2] dark:hover:bg-[#2A1716] transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                          className="coral-btn-secondary h-8 px-3 rounded-input text-xs font-medium text-ink-2 hover:text-error flex items-center gap-1 cursor-pointer disabled:opacity-50"
                         >
                           <X className="w-3.5 h-3.5" aria-hidden="true" />
                           <span>{item.status === 'approved' ? 'Revoke' : 'Reject'}</span>
@@ -336,7 +333,7 @@ function AdminAllowlistContent() {
                         onClick={() => void handleRemove(item.email)}
                         title="Remove from allowlist"
                         aria-label={`Remove ${item.email}`}
-                        className="h-8 w-8 rounded-lg text-[#787268] hover:text-[#B42318] dark:hover:text-[#F97066] hover:bg-[#EAE5DB] dark:hover:bg-[#22201C] transition-colors flex items-center justify-center cursor-pointer disabled:opacity-50"
+                        className="h-8 w-8 rounded-input text-muted hover:text-error hover:bg-paper-2 active:translate-y-px transition-colors flex items-center justify-center cursor-pointer disabled:opacity-50"
                       >
                         <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                       </button>

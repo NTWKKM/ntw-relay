@@ -45,17 +45,17 @@ export function QrModal({ data, onClose }: QrModalProps) {
       size="sm"
     >
       {data && (
-        <div className="w-full rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#DDD6C8] dark:border-[#2E2A25] p-5 sm:p-6 space-y-5 shadow-2xl">
+        <div className="w-full rounded-card coral-stock p-5 sm:p-6 space-y-5">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <h2
                 id="qr-modal-title"
-                className="font-[family-name:var(--font-display)] text-lg font-medium text-[#181715] dark:text-[#F3EFE8] truncate"
+                className="font-display text-lg font-semibold text-ink truncate"
               >
                 {data.title}
               </h2>
               {data.subtitle && (
-                <p className="mt-0.5 text-xs text-[#6B655C] dark:text-[#968F84] truncate">
+                <p className="mt-0.5 text-xs text-muted truncate">
                   {data.subtitle}
                 </p>
               )}
@@ -64,7 +64,7 @@ export function QrModal({ data, onClose }: QrModalProps) {
               type="button"
               onClick={onClose}
               aria-label="Close QR dialog"
-              className="h-9 w-9 -mr-1.5 -mt-1.5 rounded-lg flex items-center justify-center text-[#787268] dark:text-[#8A8378] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#F2EFE7] dark:hover:bg-[#272420] transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D4ED8]"
+              className="h-9 w-9 -mr-1.5 -mt-1.5 rounded-input flex items-center justify-center text-muted hover:text-ink hover:bg-paper-2 active:translate-y-px transition-colors cursor-pointer shrink-0"
             >
               <X className="w-4 h-4" aria-hidden="true" />
             </button>
@@ -73,7 +73,7 @@ export function QrModal({ data, onClose }: QrModalProps) {
           {data.value ? (
             <>
               <div className="flex items-center justify-center">
-                <div className="bg-white p-5 rounded-xl border border-[#E2DCD0] dark:border-transparent">
+                <div className="bg-cotton p-5 rounded-input border border-rule">
                   <QRCodeSVG
                     value={data.value}
                     size={212}
@@ -85,7 +85,7 @@ export function QrModal({ data, onClose }: QrModalProps) {
                 </div>
               </div>
 
-              <p className="rounded-lg bg-[#F2EFE7] dark:bg-[#131210] border border-[#E2DCD0] dark:border-[#272420] px-3 py-2 text-xs font-mono text-[#3D3A35] dark:text-[#CFC8BC] [overflow-wrap:anywhere] line-clamp-2">
+              <p className="rounded-input bg-paper-2 border border-rule px-3 py-2 text-xs font-outlier text-ink-2 [overflow-wrap:anywhere] line-clamp-2">
                 {data.value}
               </p>
 
@@ -93,10 +93,10 @@ export function QrModal({ data, onClose }: QrModalProps) {
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className="flex-1 h-10 rounded-lg bg-[#181715] hover:bg-[#2E2C28] dark:bg-[#F3EFE8] dark:hover:bg-[#E2DBD0] text-[#FCFBF8] dark:text-[#121110] text-sm font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
+                  className="coral-btn-ink flex-1 h-10 rounded-stock text-sm font-medium flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
                 >
                   {copied ? (
-                    <Check className="w-4 h-4 text-[#4ADE80] dark:text-[#15803D]" aria-hidden="true" />
+                    <Check className="w-4 h-4 text-paid" aria-hidden="true" />
                   ) : (
                     <Copy className="w-4 h-4" aria-hidden="true" />
                   )}
@@ -108,7 +108,7 @@ export function QrModal({ data, onClose }: QrModalProps) {
                     href={data.value}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="h-10 px-3.5 rounded-lg bg-[#F2EFE7] dark:bg-[#25221E] border border-[#DDD6C8] dark:border-[#322E28] text-[#181715] dark:text-[#F3EFE8] text-sm font-medium hover:border-[#BFB7A8] dark:hover:border-[#4A453E] transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap"
+                    className="coral-btn-secondary h-10 px-3.5 rounded-stock text-sm font-medium flex items-center justify-center gap-1.5 whitespace-nowrap"
                   >
                     <ExternalLink className="w-4 h-4" aria-hidden="true" />
                     <span>Open</span>
@@ -117,12 +117,12 @@ export function QrModal({ data, onClose }: QrModalProps) {
               </div>
             </>
           ) : (
-            <div className="rounded-lg bg-[#F2EFE7] dark:bg-[#131210] border border-[#E2DCD0] dark:border-[#272420] p-4 flex items-start gap-3">
+            <div className="rounded-input bg-paper-2 border border-rule p-4 flex items-start gap-3">
               <Info
-                className="w-4 h-4 text-[#1D4ED8] dark:text-[#60A5FA] mt-0.5 shrink-0"
+                className="w-4 h-4 text-accent-2 mt-0.5 shrink-0"
                 aria-hidden="true"
               />
-              <p className="text-sm text-[#3D3A35] dark:text-[#CFC8BC] leading-relaxed">
+              <p className="text-sm text-ink-2 leading-relaxed">
                 {data.unavailableReason || 'QR unavailable.'}
               </p>
             </div>

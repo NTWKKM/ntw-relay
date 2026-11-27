@@ -78,25 +78,25 @@ export default function LoginPage() {
 
   if (checkingSession) {
     return (
-      <div className="min-h-screen bg-[#F5F2EB] dark:bg-[#121110] flex items-center justify-center">
-        <div className="w-6 h-6 rounded-full border-2 border-[#DDD6C8] dark:border-[#2C2925] border-t-[#181715] dark:border-t-[#F3EFE8] animate-spin" />
+      <div className="min-h-dvh bg-desk flex items-center justify-center">
+        <div className="w-6 h-6 rounded-full border-2 border-rule-2 border-t-ink animate-spin keep-motion" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F2EB] text-[#181715] dark:bg-[#121110] dark:text-[#F3EFE8] flex flex-col">
+    <div className="min-h-dvh bg-desk text-ink flex flex-col">
       {/* Compact single-row Top Bar */}
-      <header className="h-14 border-b border-[#E2DCD0] dark:border-[#272420]">
+      <header className="h-14 border-b border-rule bg-paper/80">
         <div className="max-w-4xl mx-auto h-full px-4 sm:px-6 flex items-center justify-between gap-6">
-          <span className="font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight text-[#181715] dark:text-[#F3EFE8] whitespace-nowrap shrink-0">
-            NTW Relay
+          <span className="font-display text-lg font-semibold tracking-tight text-ink whitespace-nowrap shrink-0">
+            Relay
           </span>
 
           <div className="flex items-center gap-4 shrink-0">
             <Link
               href="/sandbox"
-              className="text-sm font-medium text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:underline underline-offset-4 transition-colors whitespace-nowrap"
+              className="text-sm font-medium text-muted hover:text-ink hover:underline underline-offset-4 transition-colors whitespace-nowrap"
             >
               Sandbox
             </Link>
@@ -106,7 +106,7 @@ export default function LoginPage() {
               onClick={toggleTheme}
               aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
               title={theme === 'light' ? 'Dark mode' : 'Light mode'}
-              className="h-8 w-8 rounded-lg text-[#5D5850] dark:text-[#A8A196] hover:text-[#181715] dark:hover:text-[#F3EFE8] hover:bg-[#EAE5DB] dark:hover:bg-[#22201C] transition-colors flex items-center justify-center cursor-pointer shrink-0"
+              className="h-8 w-8 rounded-input text-muted hover:text-ink hover:bg-paper-2 active:translate-y-px transition-colors flex items-center justify-center cursor-pointer shrink-0"
             >
               {theme === 'light' ? (
                 <Moon className="w-4 h-4" aria-hidden="true" />
@@ -120,13 +120,13 @@ export default function LoginPage() {
 
       {/* Centered Minimal Sign-In Canvas */}
       <main className="flex-1 flex items-center justify-center px-4 sm:px-6 py-12">
-        <div className="w-full max-w-[380px] rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] p-6 sm:p-8 space-y-6">
+        <div className="w-full max-w-[380px] rounded-card coral-stock p-6 sm:p-8 space-y-6">
           <div className="space-y-1.5">
-            <h1 className="font-[family-name:var(--font-display)] text-2xl font-medium tracking-tight text-[#181715] dark:text-[#F3EFE8] [text-wrap:balance]">
+            <h1 className="font-display text-2xl font-semibold tracking-tight text-ink text-balance">
               Sign in
             </h1>
-            <p className="text-sm text-[#6B655C] dark:text-[#968F84]">
-              Cross-device clipboard &amp; file relay.
+            <p className="text-sm text-muted">
+              Cross-device clipboard and file relay.
             </p>
           </div>
 
@@ -134,7 +134,7 @@ export default function LoginPage() {
             <div className="space-y-1.5">
               <label
                 htmlFor="login-email-input"
-                className="block text-xs font-medium text-[#3D3A35] dark:text-[#CFC8BC]"
+                className="block text-xs font-medium text-ink-2"
               >
                 Email
               </label>
@@ -150,14 +150,14 @@ export default function LoginPage() {
                   if (error) setError(null);
                 }}
                 placeholder="you@example.com"
-                className="mwg-input w-full h-11 rounded-lg bg-[#F5F2EB] dark:bg-[#121110] border border-[#DDD6C8] dark:border-[#2E2A25] px-3.5 text-sm text-[#181715] dark:text-[#F3EFE8] placeholder:text-[#8E877B] dark:placeholder:text-[#6E685F] focus:outline-none focus:border-[#1D4ED8] dark:focus:border-[#60A5FA] focus:ring-2 focus:ring-[#1D4ED8]/15 dark:focus:ring-[#60A5FA]/20 transition-colors"
+                className="mwg-input w-full h-11 rounded-input bg-paper border border-rule-2 px-3.5 text-sm text-ink placeholder:text-muted focus:border-focus transition-colors"
               />
             </div>
 
             <div className="space-y-1.5">
               <label
                 htmlFor="login-password-input"
-                className="block text-xs font-medium text-[#3D3A35] dark:text-[#CFC8BC]"
+                className="block text-xs font-medium text-ink-2"
               >
                 Password
               </label>
@@ -173,13 +173,13 @@ export default function LoginPage() {
                     if (error) setError(null);
                   }}
                   placeholder="••••••••"
-                  className="mwg-input w-full h-11 rounded-lg bg-[#F5F2EB] dark:bg-[#121110] border border-[#DDD6C8] dark:border-[#2E2A25] px-3.5 pr-11 text-sm text-[#181715] dark:text-[#F3EFE8] placeholder:text-[#8E877B] dark:placeholder:text-[#6E685F] focus:outline-none focus:border-[#1D4ED8] dark:focus:border-[#60A5FA] focus:ring-2 focus:ring-[#1D4ED8]/15 dark:focus:ring-[#60A5FA]/20 transition-colors"
+                  className="mwg-input w-full h-11 rounded-input bg-paper border border-rule-2 px-3.5 pr-11 text-sm text-ink placeholder:text-muted focus:border-focus transition-colors"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 h-9 w-9 flex items-center justify-center rounded-md text-[#787268] dark:text-[#8A8378] hover:text-[#181715] dark:hover:text-[#F3EFE8] transition-colors cursor-pointer"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-9 w-9 flex items-center justify-center rounded-input text-muted hover:text-ink active:translate-y-px transition-colors cursor-pointer"
                 >
                   {showPassword ? (
                     <EyeOff className="w-4 h-4" aria-hidden="true" />
@@ -199,9 +199,9 @@ export default function LoginPage() {
                 type="checkbox"
                 checked={rememberDevice}
                 onChange={(e) => setRememberDevice(e.target.checked)}
-                className="h-4 w-4 rounded border-[#CFC7B8] dark:border-[#3D3831] bg-[#F5F2EB] dark:bg-[#121110] accent-[#181715] dark:accent-[#F3EFE8] cursor-pointer"
+                className="h-4 w-4 rounded border-rule-2 bg-paper accent-board cursor-pointer"
               />
-              <span className="text-xs text-[#5D5850] dark:text-[#A8A196]">
+              <span className="text-xs text-muted">
                 Remember this device
               </span>
             </label>
@@ -209,7 +209,7 @@ export default function LoginPage() {
             {error && (
               <p
                 role="alert"
-                className="text-xs text-[#991B1B] dark:text-[#FCA5A5] bg-[#FEF2F2] dark:bg-[#3A1717]/60 border border-[#FECACA] dark:border-[#7F1D1D]/70 rounded-lg px-3.5 py-2.5 leading-relaxed"
+                className="text-xs text-error bg-paper-2 border border-error/30 rounded-input px-3.5 py-2.5 leading-relaxed"
               >
                 {error}
               </p>
@@ -218,7 +218,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={submitting || googleLoading}
-              className="w-full h-11 rounded-lg bg-[#181715] hover:bg-[#2E2C28] dark:bg-[#F3EFE8] dark:hover:bg-[#E2DBD0] disabled:opacity-50 text-[#FCFBF8] dark:text-[#121110] text-sm font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer"
+              className="coral-btn-ink w-full h-11 rounded-stock disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center justify-center gap-2 cursor-pointer"
             >
               <span>{submitting ? 'Signing in...' : 'Sign in'}</span>
               <ArrowRight className="w-4 h-4" aria-hidden="true" />
@@ -226,16 +226,16 @@ export default function LoginPage() {
           </form>
 
           <div className="relative flex items-center">
-            <div className="flex-1 border-t border-[#E2DCD0] dark:border-[#2A2723]" />
-            <span className="px-3 text-xs text-[#787268] dark:text-[#8A8378]">or</span>
-            <div className="flex-1 border-t border-[#E2DCD0] dark:border-[#2A2723]" />
+            <div className="flex-1 border-t border-rule" />
+            <span className="px-3 text-xs text-muted">or</span>
+            <div className="flex-1 border-t border-rule" />
           </div>
 
           <button
             type="button"
             onClick={handleGoogleClick}
             disabled={submitting || googleLoading}
-            className="w-full h-11 rounded-lg bg-[#F5F2EB] dark:bg-[#141311] border border-[#DDD6C8] dark:border-[#302C27] hover:border-[#B9B0A0] dark:hover:border-[#4A453E] text-[#181715] dark:text-[#F3EFE8] disabled:opacity-50 text-sm font-medium transition-colors cursor-pointer"
+            className="coral-btn-secondary w-full h-11 rounded-stock disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium cursor-pointer"
           >
             {googleLoading ? 'Connecting...' : 'Continue with Google'}
           </button>

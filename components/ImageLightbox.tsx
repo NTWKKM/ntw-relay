@@ -128,22 +128,23 @@ export function ImageLightbox({ item, onClose, onOpenQr }: ImageLightboxProps) {
     >
       {item && (
         <div
-          className="h-dvh w-screen flex flex-col bg-[#121110]/94 p-4 sm:p-6"
+          className="h-dvh w-full flex flex-col bg-board/95 p-4 sm:p-6 text-board-type"
           onClick={onClose}
         >
           <div
-            className="max-w-5xl w-full mx-auto flex items-center justify-between gap-4 pb-4 border-b border-[#2C2925]"
+            className="max-w-5xl w-full mx-auto flex items-center justify-between gap-4 pb-4 border-b border-rule/30"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="min-w-0">
               <h2
                 id="lightbox-title"
-                className="font-[family-name:var(--font-display)] text-base font-medium text-[#F3EFE8] truncate"
+                className="font-display text-base font-semibold text-board-type truncate"
               >
                 {item.fileName || 'Image'}
               </h2>
-              <p className="font-mono text-xs text-[#A8A196] tabular-nums mt-0.5">
-                {formatBytes(item.fileSize)} · {formatRelativeTime(item.createdAtMs)}
+              <p className="text-xs text-board-type/70 tabular-nums mt-0.5 flex items-center gap-3">
+                <span>{formatBytes(item.fileSize)}</span>
+                <span>{formatRelativeTime(item.createdAtMs)}</span>
               </p>
             </div>
 
@@ -151,13 +152,13 @@ export function ImageLightbox({ item, onClose, onOpenQr }: ImageLightboxProps) {
               <button
                 type="button"
                 onClick={handleCopyImage}
-                className="h-9 px-3 rounded-lg bg-[#1E1C1A] border border-[#322E28] text-xs sm:text-sm font-medium text-[#F3EFE8] hover:bg-[#2A2723] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                className="h-9 px-3 rounded-input bg-paper-2/15 border border-board-type/20 text-xs sm:text-sm font-medium text-board-type hover:bg-paper-2/25 active:translate-y-px transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
               >
                 {activeCopyFeedback ? (
                   activeCopyFeedback.ok ? (
-                    <Check className="w-4 h-4 text-[#4ADE80]" aria-hidden="true" />
+                    <Check className="w-4 h-4 text-success" aria-hidden="true" />
                   ) : (
-                    <AlertCircle className="w-4 h-4 text-[#F87171]" aria-hidden="true" />
+                    <AlertCircle className="w-4 h-4 text-error" aria-hidden="true" />
                   )
                 ) : (
                   <Copy className="w-4 h-4" aria-hidden="true" />
@@ -168,14 +169,14 @@ export function ImageLightbox({ item, onClose, onOpenQr }: ImageLightboxProps) {
               <button
                 type="button"
                 onClick={handleDownload}
-                className="h-9 px-3 rounded-lg bg-[#F3EFE8] text-[#121110] text-xs sm:text-sm font-medium hover:bg-[#E2DBD0] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                className="h-9 px-3 rounded-input bg-board-type text-board text-xs sm:text-sm font-medium hover:opacity-90 active:translate-y-px transition-opacity flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
               >
                 {activeDownloadError ? (
-                  <AlertCircle className="w-4 h-4 text-[#B91C1C]" aria-hidden="true" />
+                  <AlertCircle className="w-4 h-4 text-error" aria-hidden="true" />
                 ) : (
                   <Download className="w-4 h-4" aria-hidden="true" />
                 )}
-                <span className={activeDownloadError ? 'text-[#B91C1C]' : 'hidden sm:inline'}>
+                <span className={activeDownloadError ? 'text-error' : 'hidden sm:inline'}>
                   {activeDownloadError || 'Download'}
                 </span>
               </button>
@@ -184,7 +185,7 @@ export function ImageLightbox({ item, onClose, onOpenQr }: ImageLightboxProps) {
                 type="button"
                 onClick={() => onOpenQr(item)}
                 aria-label="Show QR code for image"
-                className="h-9 w-9 rounded-lg bg-[#1E1C1A] border border-[#322E28] text-[#CFC8BC] hover:text-[#F3EFE8] hover:bg-[#2A2723] transition-colors flex items-center justify-center cursor-pointer"
+                className="h-9 w-9 rounded-input bg-paper-2/15 border border-board-type/20 text-board-type/80 hover:text-board-type hover:bg-paper-2/25 active:translate-y-px transition-colors flex items-center justify-center cursor-pointer"
               >
                 <QrCode className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -193,7 +194,7 @@ export function ImageLightbox({ item, onClose, onOpenQr }: ImageLightboxProps) {
                 type="button"
                 onClick={onClose}
                 aria-label="Close image preview"
-                className="h-9 w-9 rounded-lg bg-[#1E1C1A] border border-[#322E28] text-[#CFC8BC] hover:text-[#F3EFE8] hover:bg-[#2A2723] transition-colors flex items-center justify-center cursor-pointer"
+                className="h-9 w-9 rounded-input bg-paper-2/15 border border-board-type/20 text-board-type/80 hover:text-board-type hover:bg-paper-2/25 active:translate-y-px transition-colors flex items-center justify-center cursor-pointer"
               >
                 <X className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -205,7 +206,7 @@ export function ImageLightbox({ item, onClose, onOpenQr }: ImageLightboxProps) {
               src={imageSrc}
               alt={item.fileName || 'Full size preview'}
               referrerPolicy="no-referrer"
-              className="max-h-full max-w-full object-contain rounded-lg border border-[#2C2925] shadow-2xl"
+              className="max-h-full max-w-full object-contain rounded-card border border-board-type/15"
               onClick={(e) => e.stopPropagation()}
             />
           </div>
