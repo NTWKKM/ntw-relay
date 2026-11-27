@@ -88,7 +88,12 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
       user.email,
       (record) => {
         if (!record) {
-          setSubscriptionState({ uid: user.uid, state: 'pending', isAdmin: false, error: null });
+          setSubscriptionState((prev) => ({
+            uid: user.uid,
+            state: 'pending',
+            isAdmin: false,
+            error: prev?.uid === user.uid ? prev.error : null,
+          }));
           if (!requestedUidsRef.current.has(user.uid)) {
             requestedUidsRef.current.add(user.uid);
             void requestAllowlistAccess({
@@ -216,7 +221,6 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
           isAdmin: false,
           error: err instanceof Error ? err.message : 'Failed to submit access request.',
         });
-        applyUserRefresh();
       } finally {
         setActionBusy(null);
       }

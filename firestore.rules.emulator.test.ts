@@ -203,7 +203,16 @@ test('signed-in get on a missing drop returns non-existent; unauthenticated and 
   const unauthDb = env.unauthenticatedContext().firestore() as unknown as Firestore;
   await assertFails(getDoc(doc(unauthDb, 'drops', 'drop_missing_1')));
 
-  const otherDb = env.authenticatedContext('user_beta_2', { email_verified: true }).firestore() as unknown as Firestore;
+  const otherEmail = 'beta@example.com';
+  await seed({
+    [`allowed_users/${otherEmail}`]: {
+      email: otherEmail,
+      status: 'approved',
+      role: 'user',
+      updatedAt: new Date(),
+    },
+  });
+  const otherDb = userDb('user_beta_2', otherEmail, true);
   await assertFails(getDoc(doc(otherDb, 'drops', 'drop_existing_1')));
 });
 
