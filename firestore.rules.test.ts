@@ -812,10 +812,28 @@ test('Storage stats rules: signed-in get, exact atomic drop create, and exact at
       },
     },
   };
-  const maxClampedCreateBatch: MockDropBatchState = {
+  // Largest drop isValidDrop accepts: 10485760 + 50000 + 160000 = 10695760 bytes (below the 11 MB cap)
+  const maxValidPreview = `data:image/jpeg;base64,${'A'.repeat(160000 - 'data:image/jpeg;base64,'.length)}`;
+  const maxValidDrop: Record<string, unknown> = {
+    ...validDrop,
+    type: 'image',
+    content: 'x'.repeat(50000),
+    fileName: 'max.jpg',
+    fileSize: MAX_FILE_SIZE,
+    mimeType: 'image/jpeg',
+    chunkCount: 14,
+    previewDataUrl: maxValidPreview,
+  };
+  const maxValidCreateBatch: MockDropBatchState = {
+    beforeDrops: {},
+    afterDrops: { drop_max_1: maxValidDrop },
+  };
+  // SYNTHETIC: fileSize exceeds the rules limit, so this shape can never be committed. It exists only
+  // to exercise the defensive minInt(11000000, ...) clamp inside dropStorageBytes in isolation.
+  const syntheticClampBatch: MockDropBatchState = {
     beforeDrops: {},
     afterDrops: {
-      drop_max_1: {
+      drop_synthetic_clamp_1: {
         ownerId: ownerAuth.uid,
         content: 'x'.repeat(50000),
         fileSize: 10950000,
@@ -843,7 +861,7 @@ test('Storage stats rules: signed-in get, exact atomic drop create, and exact at
   assert.equal(canGetStorageStats(unverifiedAuth), true);
   assert.equal(canGetStorageStats(attackerAuth), true);
 
-  // Exact matching create: empty drop (0 bytes), UTF-8 + fileSize + previewDataUrl, and 11 MB clamp
+  // Exact matching create: empty drop (0 bytes), UTF-8 + fileSize + previewDataUrl, and largest valid drop
   assert.equal(
     canCreateStorageStats(ownerAuth, { totalBytes: 0, lastDropId: 'drop_empty_1', updatedAt: REQUEST_TIME }, emptyDropCreateBatch),
     true
@@ -856,11 +874,24 @@ test('Storage stats rules: signed-in get, exact atomic drop create, and exact at
     ),
     true
   );
+  assert.equal(isValidDrop(maxValidDrop, ownerAuth), true);
+  assert.equal(canCreate(ownerAuth, 'drop_max_1', maxValidDrop), true);
   assert.equal(
     canCreateStorageStats(
       ownerAuth,
-      { totalBytes: MAX_STORAGE_DELTA, lastDropId: 'drop_max_1', updatedAt: REQUEST_TIME },
-      maxClampedCreateBatch
+      { totalBytes: MAX_FILE_SIZE + 50000 + 160000, lastDropId: 'drop_max_1', updatedAt: REQUEST_TIME },
+      maxValidCreateBatch
+    ),
+    true
+  );
+
+  // Synthetic (never committable) shape isolating the defensive 11 MB clamp
+  assert.equal(isValidDrop({ ...validDrop, fileSize: 10950000 }, ownerAuth), false);
+  assert.equal(
+    canCreateStorageStats(
+      ownerAuth,
+      { totalBytes: MAX_STORAGE_DELTA, lastDropId: 'drop_synthetic_clamp_1', updatedAt: REQUEST_TIME },
+      syntheticClampBatch
     ),
     true
   );

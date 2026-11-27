@@ -17,6 +17,9 @@ import {
   writeBatch,
   type Firestore,
 } from 'firebase/firestore';
+import { initializeApp as initializeAdminApp, deleteApp, type App } from 'firebase-admin/app';
+import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
+import { recomputeStorageStats } from './lib/storage-backfill';
 
 /**
  * Executes firestore.rules inside the Firestore emulator (run via `npm run test:rules`).
@@ -29,15 +32,18 @@ const STATS = ['stats', 'storage'] as const;
 const utf8 = new TextEncoder();
 
 let env: RulesTestEnvironment;
+let adminApp: App;
 
 before(async () => {
   env = await initializeTestEnvironment({
     projectId: 'demo-ntw-relay',
     firestore: { rules: fs.readFileSync(path.resolve(process.cwd(), 'firestore.rules'), 'utf8') },
   });
+  adminApp = initializeAdminApp({ projectId: 'demo-ntw-relay' }, 'backfill-test');
 });
 
 after(async () => {
+  if (adminApp) await deleteApp(adminApp);
   await env?.cleanup();
 });
 
@@ -152,4 +158,62 @@ test('owner may toggle isCode but not the counted marker', async () => {
   await assertSucceeds(atomicCreate(db, 'drop_t', textDrop('x'), 1, false));
   await assertSucceeds(updateDoc(doc(db, 'drops', 'drop_t'), { isCode: true }));
   await assertFails(updateDoc(doc(db, 'drops', 'drop_t'), { counted: false }));
+});
+
+// ---------------------------------------------------------------------------
+// Admin SDK /stats/storage backfill (lib/storage-backfill.ts)
+// ---------------------------------------------------------------------------
+
+async function statsTotal(): Promise<number | undefined> {
+  const snap = await getAdminFirestore(adminApp).collection('stats').doc('storage').get();
+  return snap.get('totalBytes');
+}
+
+test('backfill dry run reports the recompute without writing', async () => {
+  await seed({ 'drops/drop_old_1': { ownerId: OWNER, type: 'text', content: 'old', createdAt: new Date() } });
+  const report = await recomputeStorageStats(getAdminFirestore(adminApp), { apply: false });
+  if (report.applied || report.nextTotalBytes !== 3 || report.newlyCounted[0] !== 'drop_old_1') {
+    throw new Error(JSON.stringify(report));
+  }
+  if ((await statsTotal()) !== undefined) throw new Error('dry run wrote /stats/storage');
+});
+
+test('backfill recomputes exact totals, marks legacy drops, skips unsizable ones, and fixes drift', async () => {
+  const db = ownerDb();
+  await assertSucceeds(atomicCreate(db, 'drop_new_1', textDrop('abcd'), 4, false));
+  await seed({
+    'drops/drop_old_1': {
+      ownerId: OWNER, type: 'file', content: 'a.bin', fileName: 'a.bin', fileSize: 1000, chunkCount: 2, createdAt: new Date(),
+    },
+    'drops/drop_bad_1': { ownerId: OWNER, type: 'file', downloadUrl: 'https://x', createdAt: new Date() },
+    // Drifted counter (e.g. drops counted before the marker existed)
+    'stats/storage': { totalBytes: 999999, lastDropId: 'drop_new_1', updatedAt: new Date() },
+  });
+
+  const report = await recomputeStorageStats(getAdminFirestore(adminApp), { apply: true });
+  const expected = 4 + 1000 + 5;
+  if (!report.applied || report.nextTotalBytes !== expected || report.skipped[0]?.id !== 'drop_bad_1') {
+    throw new Error(JSON.stringify(report));
+  }
+  if ((await statsTotal()) !== expected) throw new Error(`totalBytes ${await statsTotal()}`);
+
+  // Backfilled drop is now counted: plain delete is denied, atomic decrement succeeds
+  await assertFails(deleteDoc(doc(db, 'drops', 'drop_old_1')));
+  const batch = writeBatch(db);
+  batch.delete(doc(db, 'drops', 'drop_old_1'));
+  batch.update(doc(db, ...STATS), { totalBytes: 4, lastDropId: 'drop_old_1', updatedAt: serverTimestamp() });
+  await assertSucceeds(batch.commit());
+
+  // Unsizable legacy drop stays uncounted and remains deletable without a stats write
+  await assertSucceeds(deleteDoc(doc(db, 'drops', 'drop_bad_1')));
+
+  // Second run is idempotent
+  const again = await recomputeStorageStats(getAdminFirestore(adminApp), { apply: true });
+  if (again.newlyCounted.length !== 0 || again.nextTotalBytes !== 4) throw new Error(JSON.stringify(again));
+});
+
+test('backfill on an empty project writes nothing', async () => {
+  const report = await recomputeStorageStats(getAdminFirestore(adminApp), { apply: true });
+  if (report.applied || report.dropCount !== 0) throw new Error(JSON.stringify(report));
+  if ((await statsTotal()) !== undefined) throw new Error('empty backfill created /stats/storage');
 });

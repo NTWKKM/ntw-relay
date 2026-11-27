@@ -19,10 +19,34 @@ npx -y firebase-tools@latest deploy --only firestore:rules
 ```
 `firebase.json` targets the named database configured in `firestore.database`.
 
+### 2.1 One-off storage counter backfill (Spark plan, runs locally)
+Drops created before `/stats/storage` existed lack the `counted` marker, so the shared storage
+meter excludes them. Deploy the rules **together with** the app build that writes `counted: true`,
+then recompute the counter once with the Admin SDK (no Cloud Functions needed):
+
+1. Firebase Console → Project settings → Service accounts → **Generate new private key**.
+   Store the JSON outside the repo and never commit it.
+2. Dry run (default, writes nothing) and review `newlyCounted`, `skipped`, `nextTotalBytes`:
+   ```bash
+   GOOGLE_APPLICATION_CREDENTIALS=~/keys/ntw-relay-admin.json npm run backfill:storage
+   ```
+3. Apply:
+   ```bash
+   GOOGLE_APPLICATION_CREDENTIALS=~/keys/ntw-relay-admin.json npm run backfill:storage -- --apply
+   ```
+
+The script (`lib/storage-backfill.ts`) reads `/stats/storage` and every drop in **one transaction**,
+marks sizable legacy drops `counted: true`, and sets `totalBytes` to the exact sum, so concurrent
+client writes retry on top of the new total. It is idempotent and also repairs counter drift.
+Drops whose shape the rules cannot size are reported under `skipped` and stay uncounted.
+Project and database default to `.firebaserc` and `firebase.json`; override with
+`--project` / `--database`. Aborts if more than 450 writes would be needed in one commit.
+Verified against the emulator by `npm run test:rules`.
+
 ## 3. How files are stored
 ```
 drops/{dropId}                    # metadata: ownerId, type, content, fileName, fileSize,
-                                  #           mimeType, chunkCount, previewDataUrl?, isCode, createdAt
+                                  #           mimeType, chunkCount, previewDataUrl?, isCode, counted, createdAt
 drops/{dropId}/chunks/{0..13}     # { ownerId, index, data: Bytes (≤ 768 KiB) }
 ```
 - Upload writes chunks first, then the parent doc (the feed never shows half-uploaded files);
