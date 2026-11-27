@@ -57,6 +57,7 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
     state: AllowlistGateState;
     isAdmin: boolean;
     error: string | null;
+    errorSource: 'request' | 'listener' | null;
   } | null>(null);
   const [actionBusy, setActionBusy] = useState<'resend' | 'refresh' | 'retry' | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
@@ -93,6 +94,7 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
             state: 'pending',
             isAdmin: false,
             error: prev?.uid === user.uid ? prev.error : null,
+            errorSource: prev?.uid === user.uid ? prev.errorSource : null,
           }));
           if (!requestedUidsRef.current.has(user.uid)) {
             requestedUidsRef.current.add(user.uid);
@@ -106,6 +108,7 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
                 state: 'pending',
                 isAdmin: false,
                 error: err instanceof Error ? err.message : 'Failed to submit access request.',
+                errorSource: 'request',
               });
             });
           }
@@ -116,6 +119,7 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
           state: record.status,
           isAdmin: record.role === 'admin' && record.status === 'approved',
           error: null,
+          errorSource: null,
         });
       },
       (err) => {
@@ -124,6 +128,7 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
           state: 'pending',
           isAdmin: false,
           error: err instanceof Error ? err.message : 'Unable to verify access status.',
+          errorSource: 'listener',
         });
       }
     );
@@ -204,22 +209,28 @@ export function AuthGuard({ children, redirectTo = '/login' }: AuthGuardProps) {
       if (!user?.email) return;
       setActionMessage(null);
       setActionBusy('retry');
+      const isListenerError = subscriptionState?.uid === user.uid && subscriptionState.errorSource === 'listener';
       setSubscriptionState((prev) =>
-        prev && prev.uid === user.uid ? { ...prev, error: null } : prev
+        prev && prev.uid === user.uid ? { ...prev, error: null, errorSource: null } : prev
       );
+      applyUserRefresh();
+      if (isListenerError) {
+        setActionBusy(null);
+        return;
+      }
       try {
         await requestAllowlistAccess({
           email: user.email,
           uid: user.uid,
           displayName: user.displayName,
         });
-        applyUserRefresh();
       } catch (err) {
         setSubscriptionState({
           uid: user.uid,
           state: 'pending',
           isAdmin: false,
           error: err instanceof Error ? err.message : 'Failed to submit access request.',
+          errorSource: 'request',
         });
       } finally {
         setActionBusy(null);
