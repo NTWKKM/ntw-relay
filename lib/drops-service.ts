@@ -8,20 +8,24 @@ import {
   getDocs,
   onSnapshot,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   Timestamp,
   updateDoc,
   where,
-  writeBatch,
+  type DocumentReference,
+  type Transaction,
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import {
+  estimateDropStorageBytes,
   formatBytes,
   generateDropId,
   looksLikeCode,
   MAX_FILE_SIZE_BYTES,
+  MAX_STORAGE_COUNTER_DELTA_BYTES,
   MAX_TEXT_LENGTH,
   sanitizeFileName,
   splitIntoChunkRanges,
@@ -31,6 +35,9 @@ import type { DropItem } from './types';
 
 const DROPS_COLLECTION = 'drops';
 const CHUNKS_SUBCOLLECTION = 'chunks';
+const STATS_COLLECTION = 'stats';
+const STORAGE_STATS_DOC = 'storage';
+const MAX_STORED_TOTAL_BYTES = 10 * 1024 * 1024 * 1024; // 10 GiB hard ceiling matching firestore.rules
 
 const MAX_BLOB_CACHE_BYTES = 50 * 1024 * 1024; // 50 MB total LRU budget
 const MAX_BLOB_CACHE_ENTRIES = 20;
@@ -126,6 +133,7 @@ export function subscribeToUserDrops(
               ? data.previewDataUrl
               : undefined,
           isCode: typeof data.isCode === 'boolean' ? data.isCode : undefined,
+          counted: data.counted === true,
           createdAtMs,
           isLocalOnly: false,
         };
@@ -144,19 +152,104 @@ export function subscribeToUserDrops(
   );
 }
 
+function clampDeltaBytes(rawDeltaBytes: number): number {
+  if (!Number.isFinite(rawDeltaBytes)) return 0;
+  return Math.max(
+    -MAX_STORAGE_COUNTER_DELTA_BYTES,
+    Math.min(MAX_STORAGE_COUNTER_DELTA_BYTES, Math.round(rawDeltaBytes))
+  );
+}
+
+/**
+ * Applies an atomic /stats/storage increment inside the same transaction as a drop create.
+ * Call after reading `statsSnap` inside `tx`.
+ */
+function writeAtomicStorageCreate(
+  tx: Transaction,
+  statsRef: DocumentReference,
+  statsExists: boolean,
+  rawCurrentBytes: unknown,
+  dropId: string,
+  addedBytes: number
+): void {
+  const delta = Math.max(0, clampDeltaBytes(addedBytes));
+  if (!statsExists) {
+    tx.set(statsRef, {
+      totalBytes: delta,
+      lastDropId: dropId,
+      updatedAt: serverTimestamp(),
+    });
+    return;
+  }
+  const current =
+    typeof rawCurrentBytes === 'number' && Number.isFinite(rawCurrentBytes)
+      ? Math.max(0, Math.floor(rawCurrentBytes))
+      : 0;
+  const next = Math.min(MAX_STORED_TOTAL_BYTES, current + delta);
+  tx.update(statsRef, {
+    totalBytes: next,
+    lastDropId: dropId,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/**
+ * Subscribes to the shared /stats/storage document tracking aggregate bytes across all accounts.
+ */
+export function subscribeToGlobalStorageBytes(
+  onUpdate: (totalBytes: number) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  if (!db) {
+    return () => {};
+  }
+
+  const statsRef = doc(db, STATS_COLLECTION, STORAGE_STATS_DOC);
+  return onSnapshot(
+    statsRef,
+    (snap) => {
+      if (!snap.exists()) {
+        onUpdate(0);
+        return;
+      }
+      const raw = snap.data().totalBytes;
+      onUpdate(typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0);
+    },
+    (error) => {
+      onError?.(error instanceof Error ? error : new Error(String(error)));
+    }
+  );
+}
+
 export async function createCloudTextDrop(userId: string, rawText: string): Promise<string> {
-  if (!db) throw new Error('Firestore is not configured.');
+  const firestore = db;
+  if (!firestore) throw new Error('Firestore is not configured.');
   const content = rawText.trim().slice(0, MAX_TEXT_LENGTH);
   const dropId = generateDropId();
   const path = `${DROPS_COLLECTION}/${dropId}`;
+  const dropRef = doc(firestore, DROPS_COLLECTION, dropId);
+  const statsRef = doc(firestore, STATS_COLLECTION, STORAGE_STATS_DOC);
+  const addedBytes = estimateDropStorageBytes({ content });
 
   try {
-    await setDoc(doc(db, DROPS_COLLECTION, dropId), {
-      ownerId: userId,
-      type: 'text',
-      content,
-      isCode: looksLikeCode(content),
-      createdAt: serverTimestamp(),
+    await runTransaction(firestore, async (tx) => {
+      const statsSnap = await tx.get(statsRef);
+      tx.set(dropRef, {
+        ownerId: userId,
+        type: 'text',
+        content,
+        isCode: looksLikeCode(content),
+        counted: true,
+        createdAt: serverTimestamp(),
+      });
+      writeAtomicStorageCreate(
+        tx,
+        statsRef,
+        statsSnap.exists(),
+        statsSnap.exists() ? statsSnap.data().totalBytes : 0,
+        dropId,
+        addedBytes
+      );
     });
     return dropId;
   } catch (error) {
@@ -217,17 +310,36 @@ export async function uploadCloudFileDrop(
       reportProgress(end);
     }
 
-    // 2) ... then the parent doc, so the feed only ever shows fully uploaded files
-    await setDoc(doc(firestore, DROPS_COLLECTION, dropId), {
-      ownerId: userId,
-      type: isImage ? 'image' : 'file',
+    // 2) ... then atomically commit the parent doc + /stats/storage increment in one transaction
+    const dropRef = doc(firestore, DROPS_COLLECTION, dropId);
+    const statsRef = doc(firestore, STATS_COLLECTION, STORAGE_STATS_DOC);
+    const addedBytes = estimateDropStorageBytes({
       content: safeName,
-      fileName: safeName,
       fileSize: file.size,
-      mimeType: contentType,
-      chunkCount: ranges.length,
-      ...(previewDataUrl ? { previewDataUrl } : {}),
-      createdAt: serverTimestamp(),
+      previewDataUrl,
+    });
+    await runTransaction(firestore, async (tx) => {
+      const statsSnap = await tx.get(statsRef);
+      tx.set(dropRef, {
+        ownerId: userId,
+        type: isImage ? 'image' : 'file',
+        content: safeName,
+        fileName: safeName,
+        fileSize: file.size,
+        mimeType: contentType,
+        chunkCount: ranges.length,
+        ...(previewDataUrl ? { previewDataUrl } : {}),
+        counted: true,
+        createdAt: serverTimestamp(),
+      });
+      writeAtomicStorageCreate(
+        tx,
+        statsRef,
+        statsSnap.exists(),
+        statsSnap.exists() ? statsSnap.data().totalBytes : 0,
+        dropId,
+        addedBytes
+      );
     });
     setBlobCacheEntry(dropId, Promise.resolve(file), file.size);
     return dropId;
@@ -313,9 +425,11 @@ export async function deleteCloudDrop(item: DropItem): Promise<void> {
   const firestore = db;
   if (!firestore) throw new Error('Firestore is not configured.');
   const path = `${DROPS_COLLECTION}/${item.id}`;
+  const dropRef = doc(firestore, DROPS_COLLECTION, item.id);
+  const statsRef = doc(firestore, STATS_COLLECTION, STORAGE_STATS_DOC);
 
   try {
-    const batch = writeBatch(firestore);
+    let chunkRefs: DocumentReference[] = [];
     if (typeof item.chunkCount === 'number' && item.chunkCount > 0) {
       // Query (not blind index deletes): rules deny deleting non-existent chunk docs
       const chunkSnap = await getDocs(
@@ -324,10 +438,39 @@ export async function deleteCloudDrop(item: DropItem): Promise<void> {
           where('ownerId', '==', item.ownerId)
         )
       );
-      chunkSnap.docs.forEach((chunkDoc) => batch.delete(chunkDoc.ref));
+      chunkRefs = chunkSnap.docs.map((chunkDoc) => chunkDoc.ref);
     }
-    batch.delete(doc(firestore, DROPS_COLLECTION, item.id));
-    await batch.commit();
+
+    await runTransaction(firestore, async (tx) => {
+      const [dropSnap, statsSnap] = await Promise.all([tx.get(dropRef), tx.get(statsRef)]);
+      if (!dropSnap.exists()) {
+        // Already deleted in another session — stay idempotent and never double-decrement
+        return;
+      }
+      chunkRefs.forEach((ref) => tx.delete(ref));
+      tx.delete(dropRef);
+      // Legacy (pre-counter) drops were never added to /stats/storage, so never subtract them
+      if (dropSnap.data().counted === true && statsSnap.exists()) {
+        const rawCurrent = statsSnap.data().totalBytes;
+        const current =
+          typeof rawCurrent === 'number' && Number.isFinite(rawCurrent)
+            ? Math.max(0, Math.floor(rawCurrent))
+            : 0;
+        // Size from the transaction's own snapshot so the delta matches rules dropStorageBytes(get(drop))
+        const stored = dropSnap.data();
+        const removedBytes = estimateDropStorageBytes({
+          content: typeof stored.content === 'string' ? stored.content : '',
+          fileSize: typeof stored.fileSize === 'number' ? stored.fileSize : undefined,
+          previewDataUrl: typeof stored.previewDataUrl === 'string' ? stored.previewDataUrl : undefined,
+        });
+        const next = Math.max(0, current - removedBytes);
+        tx.update(statsRef, {
+          totalBytes: next,
+          lastDropId: item.id,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    });
     deleteBlobCacheEntry(item.id);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);

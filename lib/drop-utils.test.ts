@@ -3,9 +3,13 @@ import assert from 'node:assert/strict';
 import {
   buildAppShareUrl,
   CHUNK_SIZE_BYTES,
+  computeStorageUsage,
+  estimateDropStorageBytes,
   hasFileData,
   MAX_CHUNK_COUNT,
   MAX_FILE_SIZE_BYTES,
+  MAX_STORAGE_COUNTER_DELTA_BYTES,
+  SPARK_STORAGE_QUOTA_BYTES,
   splitIntoChunkRanges,
   filterDrops,
   formatBytes,
@@ -287,5 +291,29 @@ test('getQrPayload caps text by UTF-8 byte length on code-point boundaries (Thai
   assert.equal(emojiTruncated.truncated, true);
   assert.equal(emojiTruncated.value, '😀😀');
   assert.equal(encoder.encode(emojiTruncated.value).length, 8);
+});
+
+test('estimateDropStorageBytes and computeStorageUsage bound deltas and compute meter thresholds', () => {
+  assert.equal(estimateDropStorageBytes({ content: 'hello' }), 5);
+  // Fractional legacy fileSize truncates like firestore.rules int(): 1 + 1 = 2, never rounded to 3
+  assert.equal(estimateDropStorageBytes({ content: 'a', fileSize: 1.8 }), 2);
+  assert.equal(estimateDropStorageBytes({ content: 'กข', fileSize: 1024, previewDataUrl: 'abc' }), 6 + 1024 + 3);
+  assert.equal(
+    estimateDropStorageBytes({ fileSize: MAX_FILE_SIZE_BYTES + 5_000_000 }),
+    MAX_STORAGE_COUNTER_DELTA_BYTES
+  );
+
+  const empty = computeStorageUsage(-100);
+  assert.equal(empty.usedBytes, 0);
+  assert.equal(empty.percent, 0);
+  assert.equal(empty.level, 'normal');
+
+  const warn = computeStorageUsage(Math.round(SPARK_STORAGE_QUOTA_BYTES * 0.8));
+  assert.equal(warn.level, 'warning');
+  assert.ok(warn.percent >= 79 && warn.percent <= 81);
+
+  const crit = computeStorageUsage(SPARK_STORAGE_QUOTA_BYTES * 1.2);
+  assert.equal(crit.percent, 100);
+  assert.equal(crit.level, 'critical');
 });
 
