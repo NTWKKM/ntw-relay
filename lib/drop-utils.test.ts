@@ -30,6 +30,10 @@ import {
 import { mapFirebaseAuthError, validateEmailAuthInput } from './auth-errors';
 import { resolveAuthGuardDecision } from './auth-guard';
 import { resolveNextAllowedUserRole } from './allowlist-service';
+import {
+  submitAllowlistStatusChange,
+  submitPreapprovedEmail,
+} from './admin-allowlist-actions';
 import { getNextTheme, resolveStoredTheme } from './theme';
 import type { DropItem } from './types';
 
@@ -251,6 +255,32 @@ test('resolveNextAllowedUserRole preserves existing admin role when requestedRol
     resolveNextAllowedUserRole({ exists: true, existingRole: 'admin', requestedRole: 'user' }),
     'user'
   );
+});
+
+test('admin allowlist handlers omit role so Firestore transaction preserves authoritative role', async () => {
+  const calls: Record<string, unknown>[] = [];
+  const fakeUpdate = async (params: Record<string, unknown>) => {
+    calls.push(params);
+  };
+
+  await submitPreapprovedEmail({
+    email: 'Promoted@Example.com',
+    adminEmail: 'admin@example.com',
+    updateStatus: fakeUpdate as never,
+  });
+  await submitAllowlistStatusChange({
+    email: 'promoted@example.com',
+    status: 'rejected',
+    adminEmail: 'admin@example.com',
+    updateStatus: fakeUpdate as never,
+  });
+
+  assert.equal(calls.length, 2);
+  assert.equal('role' in calls[0], false);
+  assert.equal('role' in calls[1], false);
+  assert.equal(calls[0].email, 'promoted@example.com');
+  assert.equal(calls[0].status, 'approved');
+  assert.equal(calls[1].status, 'rejected');
 });
 
 test('material theme resolution defaults to Atelier Paper light and toggles cleanly', () => {

@@ -21,6 +21,10 @@ import { initializeApp as initializeAdminApp, deleteApp, type App } from 'fireba
 import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
 import { recomputeStorageStats } from './lib/storage-backfill';
 import { setAllowedUserStatusWithDb } from './lib/allowlist-service';
+import {
+  submitAllowlistStatusChange,
+  submitPreapprovedEmail,
+} from './lib/admin-allowlist-actions';
 
 /**
  * Executes firestore.rules inside the Firestore emulator (run via `npm run test:rules`).
@@ -376,8 +380,10 @@ test('allowed_users: admin can approve, reject, and delete others; non-admin is 
   await assertFails(deleteDoc(doc(admin, 'allowed_users', ADMIN_EMAIL)));
 });
 
-test('allowed_users: status-only update preserves admin role in Firestore even when caller has stale user view', async () => {
+test('allowed_users: status-only update through admin handlers preserves admin role in Firestore even with stale user list', async () => {
   const promotedEmail = 'promoted@example.com';
+  // Stale client list still shows role: 'user', while Firestore already holds role: 'admin'
+  const staleUsersList = [{ email: promotedEmail, status: 'pending' as const, role: 'user' as const }];
   await seed({
     [`allowed_users/${promotedEmail}`]: {
       email: promotedEmail,
@@ -388,16 +394,33 @@ test('allowed_users: status-only update preserves admin role in Firestore even w
   });
 
   const admin = adminDb();
+  const updateStatus = (params: Parameters<typeof setAllowedUserStatusWithDb>[1]) =>
+    setAllowedUserStatusWithDb(admin, params);
+
   await assertSucceeds(
-    setAllowedUserStatusWithDb(admin, {
-      email: promotedEmail,
+    submitAllowlistStatusChange({
+      email: staleUsersList[0].email,
       status: 'approved',
       adminEmail: ADMIN_EMAIL,
+      updateStatus,
     })
   );
 
-  const snap = await getDoc(doc(admin, 'allowed_users', promotedEmail));
+  let snap = await getDoc(doc(admin, 'allowed_users', promotedEmail));
   if (snap.data()?.status !== 'approved' || snap.data()?.role !== 'admin') {
-    throw new Error(`expected approved admin, got ${JSON.stringify(snap.data())}`);
+    throw new Error(`expected approved admin after status change, got ${JSON.stringify(snap.data())}`);
+  }
+
+  await assertSucceeds(
+    submitPreapprovedEmail({
+      email: promotedEmail,
+      adminEmail: ADMIN_EMAIL,
+      updateStatus,
+    })
+  );
+
+  snap = await getDoc(doc(admin, 'allowed_users', promotedEmail));
+  if (snap.data()?.status !== 'approved' || snap.data()?.role !== 'admin') {
+    throw new Error(`expected approved admin after preapprove, got ${JSON.stringify(snap.data())}`);
   }
 });

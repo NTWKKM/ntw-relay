@@ -20,14 +20,16 @@ import { AuthGuard, useAuthUser } from '@/components/AuthGuard';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useMaterialTheme } from '@/components/ThemeProvider';
 import {
-  isValidEmailFormat,
   normalizeEmail,
   removeAllowedUser,
-  setAllowedUserStatus,
   subscribeToAllAllowedUsers,
   type AllowedUserRecord,
   type AllowlistStatus,
 } from '@/lib/allowlist-service';
+import {
+  submitAllowlistStatusChange,
+  submitPreapprovedEmail,
+} from '@/lib/admin-allowlist-actions';
 import { signOutUser } from '@/lib/firebase';
 
 const STATUS_LABEL: Record<AllowlistStatus, string> = {
@@ -114,16 +116,10 @@ function AdminAllowlistContent() {
     e.preventDefault();
     setError(null);
     const normalized = normalizeEmail(newEmail);
-    if (!isValidEmailFormat(normalized)) {
-      setError('กรุณากรอกอีเมลให้ถูกต้อง');
-      return;
-    }
-
     setBusyKey(`add:${normalized}`);
     try {
-      await setAllowedUserStatus({
-        email: normalized,
-        status: 'approved',
+      await submitPreapprovedEmail({
+        email: newEmail,
         adminEmail: user?.email ?? '',
       });
       setNewEmail('');
@@ -138,7 +134,7 @@ function AdminAllowlistContent() {
     setError(null);
     setBusyKey(`${status}:${email}`);
     try {
-      await setAllowedUserStatus({
+      await submitAllowlistStatusChange({
         email,
         status,
         adminEmail: user?.email ?? '',
