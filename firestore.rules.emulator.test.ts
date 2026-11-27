@@ -36,10 +36,10 @@ let adminApp: App;
 
 before(async () => {
   env = await initializeTestEnvironment({
-    projectId: 'demo-ntw-relay',
+    projectId: 'demo-relay',
     firestore: { rules: fs.readFileSync(path.resolve(process.cwd(), 'firestore.rules'), 'utf8') },
   });
-  adminApp = initializeAdminApp({ projectId: 'demo-ntw-relay' }, 'backfill-test');
+  adminApp = initializeAdminApp({ projectId: 'demo-relay' }, 'backfill-test');
 });
 
 after(async () => {

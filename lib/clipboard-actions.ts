@@ -112,7 +112,7 @@ function triggerAnchorDownload(href: string, fileName: string) {
  * Throws when cloud chunks cannot be loaded so callers can surface the failure.
  */
 export async function downloadDropFile(item: DropItem): Promise<void> {
-  const fileName = item.fileName || `ntw-relay-${item.id}`;
+  const fileName = item.fileName || `relay-${item.id}`;
 
   if (
     item.downloadUrl &&

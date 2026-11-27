@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "test": "node --import jiti/register --test lib/drop-utils.test.ts firestore.rules.test.ts",
     "backfill:storage": "node --import jiti/register scripts/backfill-storage-stats.ts",
-    "test:rules": "firebase emulators:exec --only firestore --project demo-ntw-relay \"node --import jiti/register --test firestore.rules.emulator.test.ts\"",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-relay \"node --import jiti/register --test firestore.rules.emulator.test.ts\"",
     "clean": "node -e \"const fs=require('fs'); for (const d of ['.next','out']) fs.rmSync(d,{recursive:true,force:true});\""
   },
   "dependencies": {

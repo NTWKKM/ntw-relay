@@ -1,7 +1,7 @@
 import type { NextConfig } from 'next';
 
 const isGithubPages = process.env.GITHUB_PAGES === 'true';
-const rawBasePath = process.env.NEXT_PUBLIC_BASE_PATH ?? (isGithubPages ? '/ntw-relay' : '');
+const rawBasePath = process.env.NEXT_PUBLIC_BASE_PATH ?? (isGithubPages ? '/relay' : '');
 const trimmedBasePath = rawBasePath.trim().replace(/^\/+|\/+$/g, '');
 const normalizedBasePath = trimmedBasePath ? `/${trimmedBasePath}` : '';
 

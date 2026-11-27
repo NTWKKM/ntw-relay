@@ -1,4 +1,4 @@
-import { FieldValue, type DocumentData, type Firestore } from 'firebase-admin/firestore';
+import { FieldValue, type DocumentData, type Firestore, type Transaction } from 'firebase-admin/firestore';
 import { estimateDropStorageBytes } from './drop-utils';
 
 /**
@@ -50,7 +50,7 @@ export async function recomputeStorageStats(
   const statsRef = db.collection('stats').doc('storage');
   const dropsRef = db.collection('drops');
 
-  return db.runTransaction(async (tx) => {
+  return db.runTransaction(async (tx: Transaction) => {
     const [statsSnap, dropsSnap] = await Promise.all([tx.get(statsRef), tx.get(dropsRef)]);
 
     const report: BackfillReport = {
