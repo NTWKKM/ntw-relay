@@ -1,5 +1,5 @@
 /* Hallmark · shape: app screen · genre: modern-minimal · theme: Coral (deal 2/3, seed cross-device-clipboard-screenshot-file-6c3c·3b81fe68·2026-11-27·r0) · redesign: full
- * nav: sticky top bar · signature: cotton drop composer with sliding-groove filter strip · states: loading, empty, error, full · modes: light+dark
+ * nav: sticky bottom dock · signature: cotton drop composer with sliding-groove filter strip · states: loading, empty, error, full · modes: light+dark
  * axes: light/grotesk-sans/warm · posture: restrained · contrast: pass · v2.0.0 */
 /* Hallmark · pre-emit critique: P5 H5 E5 S5 R4 V5 · weakest: R, kept tactile letterpress shadows only in light mode and removed backdrop blur · modes: light+dark */
 /* Hallmark · reworded "NTW Relay" to "Relay" · user requested brand rename */
@@ -18,6 +18,11 @@
     font-family: var(--font-body);
     scrollbar-width: thin;
     scrollbar-color: var(--color-muted) var(--color-paper);
+    scroll-padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .coral-bottom-dock {
+    padding-bottom: max(var(--space-sm), env(safe-area-inset-bottom, 0px));
   }
 
   body {
