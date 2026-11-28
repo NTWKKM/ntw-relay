@@ -105,6 +105,9 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
   const [sessionLargeLocalItems, setSessionLargeLocalItems] = useState<DropItem[]>([]);
   const [relayBurstKey, setRelayBurstKey] = useState(0);
   const [clearedRelayFeedKey, setClearedRelayFeedKey] = useState(0);
+  // IDs created by the most recent successful send, so the feed highlights
+  // exactly those cards regardless of the active filter or search.
+  const [justRelayedIds, setJustRelayedIds] = useState<ReadonlySet<string>>(() => new Set());
   const isRelayFeedCatching = relayBurstKey > 0 && clearedRelayFeedKey !== relayBurstKey;
   const sessionLargeLocalItemsRef = useRef<DropItem[]>(sessionLargeLocalItems);
 
@@ -182,12 +185,17 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
     };
   }, [authReady, isCloudSynced, firebaseUserUid]);
 
+  const markRelayed = useCallback((ids: string[]) => {
+    setJustRelayedIds(new Set(ids));
+    setRelayBurstKey((k) => k + 1);
+  }, []);
+
   const handleSendText = useCallback(
     async (text: string) => {
       setSyncNotice(null);
       if (isCloudSynced && firebaseUser) {
-        await createCloudTextDrop(firebaseUser.uid, text);
-        setRelayBurstKey((k) => k + 1);
+        const dropId = await createCloudTextDrop(firebaseUser.uid, text);
+        markRelayed([dropId]);
         return;
       }
 
@@ -204,16 +212,16 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
       const next = [newItem, ...getLocalDemoSnapshot()];
       const saved = saveLocalDemoItems(next);
       if (!saved.ok && saved.error) setSyncNotice(saved.error);
-      setRelayBurstKey((k) => k + 1);
+      markRelayed([newItem.id]);
     },
-    [isCloudSynced, firebaseUser]
+    [isCloudSynced, firebaseUser, markRelayed]
   );
 
   const handleUploadFiles = useCallback(
     async (files: File[]) => {
       if (files.length === 0) return;
       setSyncNotice(null);
-      let anySucceeded = false;
+      const relayedIds: string[] = [];
 
       await Promise.all(
         files.map(async (file) => {
@@ -236,7 +244,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
 
           try {
             if (isCloudSynced && firebaseUser) {
-              await uploadCloudFileDrop(firebaseUser.uid, file, {
+              const dropId = await uploadCloudFileDrop(firebaseUser.uid, file, {
                 onProgress: ({ bytesTransferred, progress, speedBps }) => {
                   setUploads((prev) =>
                     prev.map((t) =>
@@ -247,6 +255,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
                   );
                 },
               });
+              relayedIds.push(dropId);
             } else {
               const isImage = file.type.startsWith('image/');
               let dataUrl: string | undefined;
@@ -292,9 +301,9 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
               } else {
                 setSessionLargeLocalItems((prev) => [newItem, ...prev]);
               }
+              relayedIds.push(newItem.id);
             }
 
-            anySucceeded = true;
             setUploads((prev) =>
               prev.map((t) =>
                 t.id === taskId
@@ -316,11 +325,11 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
         })
       );
 
-      if (anySucceeded) {
-        setRelayBurstKey((k) => k + 1);
+      if (relayedIds.length > 0) {
+        markRelayed(relayedIds);
       }
     },
-    [isCloudSynced, firebaseUser]
+    [isCloudSynced, firebaseUser, markRelayed]
   );
 
   // Global Cmd/Ctrl + V direct screenshot/image upload anywhere on page
@@ -749,11 +758,11 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
             <div className="space-y-3" data-testid="drop-feed">
               <MotionConfig reducedMotion="user">
                 <AnimatePresence mode="popLayout">
-                  {filteredItems.map((item, index) => (
+                  {filteredItems.map((item) => (
                     <DropCard
                       key={item.id}
                       item={item}
-                      isJustRelayed={index === 0 && isRelayFeedCatching}
+                      isJustRelayed={isRelayFeedCatching && justRelayedIds.has(item.id)}
                       onDelete={handleDeleteItem}
                       onToggleCode={handleToggleCode}
                       onOpenQr={handleOpenItemQr}

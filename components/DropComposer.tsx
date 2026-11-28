@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AnimatePresence, MotionConfig, motion, useReducedMotion } from 'motion/react';
 import {
   AlertCircle,
@@ -84,6 +84,9 @@ export function DropComposer({
   const prefersReducedMotion = useReducedMotion();
   const [clearedBurstKey, setClearedBurstKey] = useState<number>(0);
   const showBurst = relayBurstKey > 0 && clearedBurstKey !== relayBurstKey;
+  // While the burst plays the composer is fully transparent; make it inert so
+  // keyboard focus and input cannot reach an invisible draft.
+  const isComposerHidden = showBurst && !prefersReducedMotion;
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -103,6 +106,21 @@ export function DropComposer({
   useEffect(() => {
     disabledRef.current = disabled;
   }, [disabled]);
+
+  // `inert` drops focus to <body>; hand it back to the textarea when the
+  // composer reappears, but only if the user was typing in it.
+  const restoreFocusRef = useRef(false);
+  useLayoutEffect(() => {
+    if (isComposerHidden) {
+      const active = document.activeElement;
+      restoreFocusRef.current = Boolean(active && formRef.current?.contains(active));
+      return;
+    }
+    if (restoreFocusRef.current) {
+      restoreFocusRef.current = false;
+      if (!disabledRef.current) textareaRef.current?.focus();
+    }
+  }, [isComposerHidden]);
 
   // Drive the water-surface filter from the composer's own animation frames,
   // so the ripple stays in lockstep with the swell and collapse.
@@ -350,6 +368,7 @@ export function DropComposer({
               }
         }
         onUpdate={showBurst && !prefersReducedMotion ? handleComposerFrame : undefined}
+        inert={isComposerHidden}
         className={`origin-center ${showBurst ? 'pointer-events-none' : ''}`}
       >
       <div style={showBurst && !prefersReducedMotion ? { filter: 'url(#relay-water-surface)' } : undefined}>
