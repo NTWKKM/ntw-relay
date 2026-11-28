@@ -503,130 +503,6 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
 
   return (
     <div className="min-h-dvh bg-desk text-ink flex flex-col">
-      {/* Sticky Top Utility Bar */}
-      <header className="sticky top-0 z-[var(--z-sticky-nav)] h-14 border-b border-rule bg-paper/95">
-        <div className="max-w-3xl mx-auto h-full px-4 sm:px-6 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="font-display text-lg font-semibold tracking-tight text-ink whitespace-nowrap shrink-0">
-              Relay
-            </span>
-
-            <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted min-w-0">
-              {isCloudSynced ? (
-                <>
-                  <Cloud className="w-3.5 h-3.5 text-success shrink-0" aria-hidden="true" />
-                  <span className="truncate max-w-[180px]">{firebaseUser?.email}</span>
-                </>
-              ) : (
-                <>
-                  <CloudOff className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                  <span className="whitespace-nowrap">Local sandbox</span>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <div
-              className="hidden md:flex items-center gap-2 pr-2 border-r border-rule text-xs text-muted tabular-nums"
-              title={
-                !isCloudSynced
-                  ? `Local sandbox usage: ${formatBytes(storageUsage.usedBytes)} / 1 GB`
-                  : storageReady
-                    ? `Shared project storage across all accounts: ${formatBytes(storageUsage.usedBytes)} / 1 GB`
-                    : globalStorageStatus === 'unavailable'
-                      ? 'Shared project storage usage unavailable'
-                      : 'Loading shared project storage usage'
-              }
-            >
-              <div
-                role="meter"
-                aria-label={isCloudSynced ? 'Shared storage usage across all accounts' : 'Local storage usage'}
-                aria-valuemin={0}
-                aria-valuemax={storageUsage.quotaBytes}
-                aria-valuenow={storageReady ? storageUsage.usedBytes : undefined}
-                aria-valuetext={
-                  storageReady
-                    ? `${formatBytes(storageUsage.usedBytes)} of 1 GB`
-                    : globalStorageStatus === 'unavailable'
-                      ? 'Storage usage unavailable'
-                      : 'Loading storage usage'
-                }
-                className="w-16 h-1.5 rounded-pill bg-paper-3 overflow-hidden"
-              >
-                <div
-                  className={`h-full w-full origin-left rounded-pill transition-transform duration-300 ${storageBarFillClass}`}
-                  style={{ transform: `scaleX(${storageScale})` }}
-                />
-              </div>
-              <span className="whitespace-nowrap">
-                {storageReady ? `${formatBytes(storageUsage.usedBytes)} / 1 GB` : '— / 1 GB'}
-              </span>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleOpenAppQr}
-              aria-label="Mobile QR"
-              className="coral-btn-ink h-8 px-2.5 sm:px-3 rounded-input text-xs font-medium flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
-            >
-              <QrCode className="w-3.5 h-3.5" aria-hidden="true" />
-              <span>
-                <span className="hidden sm:inline">Mobile </span>QR
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={toggleTheme}
-              aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
-              title={theme === 'light' ? 'Dark mode' : 'Light mode'}
-              className="h-8 w-8 rounded-input text-muted hover:text-ink hover:bg-paper-2 active:translate-y-px transition-colors flex items-center justify-center cursor-pointer shrink-0"
-            >
-              {theme === 'light' ? (
-                <Moon className="w-3.5 h-3.5" aria-hidden="true" />
-              ) : (
-                <Sun className="w-3.5 h-3.5" aria-hidden="true" />
-              )}
-            </button>
-
-            {isCloudSynced && isAdmin && (
-              <Link
-                href="/admin"
-                aria-label="Allowlist Admin"
-                title="Allowlist Admin"
-                className="h-8 px-2.5 rounded-input text-xs font-medium text-muted hover:text-ink hover:bg-paper-2 active:translate-y-px transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0"
-              >
-                <Shield className="w-3.5 h-3.5" aria-hidden="true" />
-                <span className="hidden sm:inline">Admin</span>
-              </Link>
-            )}
-
-            {isCloudSynced ? (
-              <button
-                type="button"
-                onClick={() => void signOutUser()}
-                aria-label="Sign out"
-                title="Sign out"
-                className="h-8 px-2.5 rounded-input text-xs font-medium text-muted hover:text-ink hover:bg-paper-2 active:translate-y-px transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
-              >
-                <LogOut className="w-3.5 h-3.5 sm:hidden" aria-hidden="true" />
-                <span className="hidden sm:inline">Sign out</span>
-              </button>
-            ) : (
-              isFirebaseConfigured && (
-                <Link
-                  href="/login"
-                  className="h-8 px-2.5 rounded-input text-xs font-medium text-muted hover:text-ink hover:bg-paper-2 active:translate-y-px transition-colors flex items-center whitespace-nowrap shrink-0"
-                >
-                  Sign in
-                </Link>
-              )
-            )}
-          </div>
-        </div>
-      </header>
-
       <main className="flex-1 w-full max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         <h1 className="sr-only">Relay</h1>
         {/* Email verification prompt (only shown when actually unverified) */}
@@ -867,12 +743,132 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
         </section>
       </main>
 
-      {/* Quiet status footer */}
-      <footer className="max-w-3xl w-full mx-auto px-4 sm:px-6 py-4 border-t border-rule flex items-center justify-between gap-3 text-xs text-muted">
-        <span className="whitespace-nowrap">Max 10 MB per file</span>
-        <span className="tabular-nums whitespace-nowrap md:hidden">
-          {storageReady ? `${formatBytes(storageUsage.usedBytes)} / 1 GB` : '— / 1 GB'}
-        </span>
+      {/* Unified Bottom Dock */}
+      <footer className="border-t border-rule bg-paper coral-bottom-dock pt-3">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center flex-wrap gap-x-3 gap-y-1 min-w-0">
+            <span className="font-display text-sm font-semibold tracking-tight text-ink whitespace-nowrap shrink-0">
+              Relay
+            </span>
+
+            <div className="flex items-center gap-1.5 text-xs text-muted min-w-0">
+              {isCloudSynced ? (
+                <>
+                  <Cloud className="w-3.5 h-3.5 text-success shrink-0" aria-hidden="true" />
+                  <span className="truncate max-w-[160px] sm:max-w-[200px]">{firebaseUser?.email}</span>
+                </>
+              ) : (
+                <>
+                  <CloudOff className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                  <span className="whitespace-nowrap">Local sandbox</span>
+                </>
+              )}
+            </div>
+
+            <span className="hidden md:inline text-xs text-muted whitespace-nowrap">
+              Max 10 MB/file
+            </span>
+
+            <div
+              className="hidden sm:flex items-center gap-2 text-xs text-muted tabular-nums"
+              title={
+                !isCloudSynced
+                  ? `Local sandbox usage: ${formatBytes(storageUsage.usedBytes)} / 1 GB`
+                  : storageReady
+                    ? `Shared project storage across all accounts: ${formatBytes(storageUsage.usedBytes)} / 1 GB`
+                    : globalStorageStatus === 'unavailable'
+                      ? 'Shared project storage usage unavailable'
+                      : 'Loading shared project storage usage'
+              }
+            >
+              <div
+                role="meter"
+                aria-label={isCloudSynced ? 'Shared storage usage across all accounts' : 'Local storage usage'}
+                aria-valuemin={0}
+                aria-valuemax={storageUsage.quotaBytes}
+                aria-valuenow={storageReady ? storageUsage.usedBytes : undefined}
+                aria-valuetext={
+                  storageReady
+                    ? `${formatBytes(storageUsage.usedBytes)} of 1 GB`
+                    : globalStorageStatus === 'unavailable'
+                      ? 'Storage usage unavailable'
+                      : 'Loading storage usage'
+                }
+                className="w-16 h-1.5 rounded-pill bg-paper-3 overflow-hidden"
+              >
+                <div
+                  className={`h-full w-full origin-left rounded-pill transition-transform duration-300 ${storageBarFillClass}`}
+                  style={{ transform: `scaleX(${storageScale})` }}
+                />
+              </div>
+              <span className="whitespace-nowrap">
+                {storageReady ? `${formatBytes(storageUsage.usedBytes)} / 1 GB` : '— / 1 GB'}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleOpenAppQr}
+              aria-label="Mobile QR"
+              className="coral-btn-ink h-9 sm:h-8 px-2.5 sm:px-3 rounded-input text-xs font-medium flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <QrCode className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>
+                <span className="hidden sm:inline">Mobile </span>QR
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+              title={theme === 'light' ? 'Dark mode' : 'Light mode'}
+              className="h-9 w-9 sm:h-8 sm:w-8 rounded-input text-muted hover:text-ink hover:bg-paper-2 active:translate-y-px transition-colors flex items-center justify-center cursor-pointer shrink-0"
+            >
+              {theme === 'light' ? (
+                <Moon className="w-3.5 h-3.5" aria-hidden="true" />
+              ) : (
+                <Sun className="w-3.5 h-3.5" aria-hidden="true" />
+              )}
+            </button>
+
+            {isCloudSynced && isAdmin && (
+              <Link
+                href="/admin"
+                aria-label="Allowlist Admin"
+                title="Allowlist Admin"
+                className="h-9 sm:h-8 px-2.5 rounded-input text-xs font-medium text-muted hover:text-ink hover:bg-paper-2 active:translate-y-px transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0"
+              >
+                <Shield className="w-3.5 h-3.5" aria-hidden="true" />
+                <span className="hidden sm:inline">Admin</span>
+              </Link>
+            )}
+
+            {isCloudSynced ? (
+              <button
+                type="button"
+                onClick={() => void signOutUser()}
+                aria-label="Sign out"
+                title="Sign out"
+                className="h-9 sm:h-8 px-2.5 rounded-input text-xs font-medium text-muted hover:text-ink hover:bg-paper-2 active:translate-y-px transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+              >
+                <LogOut className="w-3.5 h-3.5 sm:hidden" aria-hidden="true" />
+                <span className="hidden sm:inline">Sign out</span>
+              </button>
+            ) : (
+              isFirebaseConfigured && (
+                <Link
+                  href="/login"
+                  className="h-9 sm:h-8 px-2.5 rounded-input text-xs font-medium text-muted hover:text-ink hover:bg-paper-2 active:translate-y-px transition-colors flex items-center whitespace-nowrap shrink-0"
+                >
+                  Sign in
+                </Link>
+              )
+            )}
+          </div>
+        </div>
       </footer>
 
       <QrModal data={qrModal} onClose={() => setQrModal(null)} />
