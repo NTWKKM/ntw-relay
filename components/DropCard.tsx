@@ -30,6 +30,7 @@ import {
   parseTextSegments,
 } from '@/lib/drop-utils';
 import type { DropItem } from '@/lib/types';
+import { EASE_STREAM, RELAY_BURST } from '@/lib/relay-motion';
 
 interface DropCardProps {
   ref?: React.Ref<HTMLElement>;
@@ -118,6 +119,7 @@ export function DropCard({
   }
 
   const shouldAnimateCatch = isJustRelayed && !prefersReducedMotion;
+  const catchAt = RELAY_BURST.landAt + 0.06;
 
   return (
     <motion.article
@@ -125,62 +127,36 @@ export function DropCard({
       layout="position"
       initial={
         shouldAnimateCatch
-          ? { opacity: 0, y: -20, scale: 0.955 }
-          : { opacity: 0, y: 10, scale: 0.985 }
+          ? { opacity: 0, y: 10, scale: 0.985 }
+          : { opacity: 0, y: 8 }
       }
-      animate={
-        deleting && !prefersReducedMotion
-          ? { opacity: 0.72, y: 0, scale: 0.975 }
-          : { opacity: 1, y: 0, scale: 1 }
-      }
+      animate={{ opacity: deleting ? 0.55 : 1, y: 0, scale: 1 }}
       exit={
         prefersReducedMotion
-          ? { opacity: 0, transition: { duration: 0.24 } }
+          ? { opacity: 0, transition: { duration: 0.2 } }
           : {
-              opacity: [1, 0.72, 0],
-              scale: [1, 0.96, 0.88],
-              y: [0, -6, -16],
-              transition: {
-                duration: 0.42,
-                times: [0, 0.45, 1],
-                ease: [0.22, 1, 0.36, 1],
-              },
+              opacity: 0,
+              y: 12,
+              scale: 0.97,
+              transition: { duration: 0.3, ease: [0.7, 0, 0.84, 0] },
             }
       }
       transition={
         shouldAnimateCatch
-          ? { duration: 0.55, delay: 0.86, ease: [0.22, 1, 0.36, 1] }
-          : { duration: 0.32, ease: [0.22, 1, 0.36, 1] }
+          ? { type: 'spring', stiffness: 260, damping: 24, delay: catchAt }
+          : { duration: 0.3, ease: EASE_STREAM }
       }
       data-testid="drop-card"
       data-drop-type={item.type}
-      className="relative group rounded-card coral-stock coral-stock-interactive px-4 sm:px-5 py-4 space-y-3 origin-center"
+      className="relative group rounded-card coral-stock coral-stock-interactive px-4 sm:px-5 py-4 space-y-3 origin-top"
     >
       {shouldAnimateCatch && (
-        <>
-          <motion.div
-            aria-hidden="true"
-            initial={{ opacity: 0, scale: 0.97 }}
-            animate={{ opacity: [0, 0.9, 0], scale: [0.97, 1.015, 1.03] }}
-            transition={{ duration: 0.68, delay: 0.98, ease: [0.22, 1, 0.36, 1] }}
-            className="pointer-events-none absolute inset-0 rounded-card border-2 border-accent-2"
-          />
-          <motion.div
-            aria-hidden="true"
-            initial={{ opacity: 0, scale: 0.99 }}
-            animate={{ opacity: [0, 0.55, 0], scale: [0.99, 1.035, 1.06] }}
-            transition={{ duration: 0.82, delay: 1.08, ease: [0.22, 1, 0.36, 1] }}
-            className="pointer-events-none absolute inset-0 rounded-card border border-accent"
-          />
-        </>
-      )}
-      {deleting && !prefersReducedMotion && (
         <motion.div
           aria-hidden="true"
           initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.14 }}
-          className="pointer-events-none absolute inset-0 rounded-card border border-error/50 bg-error/5"
+          animate={{ opacity: [0, 1, 0] }}
+          transition={{ duration: 0.9, delay: catchAt, times: [0, 0.2, 1], ease: 'easeOut' }}
+          className="pointer-events-none absolute inset-0 rounded-card border border-water-crest"
         />
       )}
       {/* Whisper-quiet metadata + minimal action cluster */}

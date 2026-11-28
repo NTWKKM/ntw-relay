@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { formatBytes, isImeComposing, MAX_TEXT_LENGTH } from '@/lib/drop-utils';
 import type { UploadTaskState } from '@/lib/types';
+import { WaterBurstSvg } from '@/components/WaterBurstSvg';
+import { EASE_STREAM, RELAY_BURST } from '@/lib/relay-motion';
 
 interface DropComposerProps {
   onSendText: (text: string) => Promise<void>;
@@ -21,126 +23,53 @@ interface DropComposerProps {
   relayBurstKey?: number;
 }
 
-function RelayDropBurst({ reducedMotion }: { reducedMotion: boolean }) {
-  if (reducedMotion) {
-    return (
-      <motion.div
-        aria-hidden="true"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: [0, 0.9, 0] }}
-        transition={{ duration: 0.36, ease: 'easeOut' }}
-        className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center"
-      >
-        <span className="h-3.5 w-3.5 rounded-full bg-accent-2 ring-4 ring-accent/35" />
-      </motion.div>
-    );
-  }
-
-  // Water-stream filaments drifting with gentle lateral wave motion into the feed
-  const streamCurrents = [
-    { x: -56, sway: -8, h: 'h-14', delay: 0.14, tone: 'bg-accent/70' },
-    { x: -24, sway: 7, h: 'h-20', delay: 0.18, tone: 'bg-ink/40' },
-    { x: 0, sway: -4, h: 'h-24', delay: 0.1, tone: 'bg-accent-2/90' },
-    { x: 24, sway: -7, h: 'h-20', delay: 0.2, tone: 'bg-ink/40' },
-    { x: 56, sway: 8, h: 'h-14', delay: 0.16, tone: 'bg-accent/70' },
-  ];
-
+// Hidden SVG filter: low-frequency turbulence displaces the composer in
+// horizontal bands, like a reflection on a disturbed water surface.
+function WaterSurfaceFilter({
+  turbulenceRef,
+  displacementRef,
+}: {
+  turbulenceRef: React.Ref<SVGFETurbulenceElement>;
+  displacementRef: React.Ref<SVGFEDisplacementMapElement>;
+}) {
   return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center overflow-visible"
-    >
-      {/* 1. Cosmic orbital horizon ring expanding & rotating as composer releases payload */}
-      <motion.div
-        initial={{ scale: 0.72, rotate: -18, opacity: 0.75 }}
-        animate={{ scale: 1.24, rotate: 24, opacity: 0 }}
-        transition={{ duration: 0.62, ease: [0.22, 1, 0.36, 1] }}
-        className="absolute h-28 w-28 rounded-full border border-accent-2/55"
-      />
-
-      {/* 2. Sinuous water-stream currents cascading downward into the feed */}
-      {streamCurrents.map((stream) => (
-        <motion.span
-          key={stream.x}
-          initial={{ x: stream.x, y: -22, scaleY: 0.2, opacity: 0 }}
-          animate={{
-            x: [stream.x, stream.x + stream.sway, stream.x - stream.sway * 0.5, stream.x],
-            y: [-22, 22, 118, 166],
-            scaleY: [0.2, 1.35, 1.6, 0.25],
-            opacity: [0, 0.9, 0.8, 0],
-          }}
-          transition={{
-            duration: 1.42,
-            delay: stream.delay,
-            times: [0, 0.3, 0.76, 1],
-            ease: [0.22, 1, 0.36, 1],
-          }}
-          className={`absolute w-0.5 origin-top rounded-pill ${stream.h} ${stream.tone}`}
+    <svg aria-hidden="true" width="0" height="0" className="absolute">
+      <filter id="relay-water-surface" x="-10%" y="-20%" width="120%" height="140%">
+        <feTurbulence
+          ref={turbulenceRef}
+          type="turbulence"
+          baseFrequency="0.002 0.018"
+          numOctaves={1}
+          seed={7}
+          result="swell"
         />
-      ))}
+        <feDisplacementMap
+          ref={displacementRef}
+          in="SourceGraphic"
+          in2="swell"
+          scale="0"
+          xChannelSelector="R"
+          yChannelSelector="G"
+        />
+      </filter>
+    </svg>
+  );
+}
 
-      {/* 3. Celestial droplet core with orbiting satellite descending through the stream */}
-      <motion.div
-        initial={{ scale: 0.45, y: -8, opacity: 0 }}
-        animate={{
-          scaleX: [0.45, 1.06, 0.96, 0.78, 0.55],
-          scaleY: [0.45, 1.06, 1.12, 1.32, 0.65],
-          y: [-8, -10, 4, 98, 164],
-          opacity: [0, 1, 1, 0.95, 0],
-        }}
-        transition={{
-          duration: 1.46,
-          times: [0.08, 0.26, 0.46, 0.8, 1],
-          ease: [0.22, 1, 0.36, 1],
-        }}
-        className="relative flex items-center justify-center"
-      >
-        {/* Orbiting ring + satellite moon */}
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1.4, ease: 'linear' }}
-          className="absolute h-11 w-11 rounded-full border border-ink/35"
-        >
-          <span className="absolute -top-1 left-1/2 -translate-x-1/2 h-1.5 w-1.5 rounded-full bg-ink" />
-        </motion.div>
-
-        {/* Liquid droplet nucleus */}
-        <div className="h-6 w-6 rounded-full bg-accent-2 border-2 border-ink shadow-[0_0_0_4px_var(--color-accent)]" />
-      </motion.div>
-
-      {/* 4. Two concentric water-surface ripples where the droplet meets the feed */}
-      <motion.div
-        initial={{ y: 158, scaleX: 0.22, scaleY: 0.45, opacity: 0 }}
-        animate={{
-          y: 158,
-          scaleX: [0.22, 1.05, 1.35],
-          scaleY: [0.45, 0.95, 1.15],
-          opacity: [0, 0.75, 0],
-        }}
-        transition={{
-          duration: 0.48,
-          delay: 1.02,
-          times: [0, 0.42, 1],
-          ease: [0.16, 1, 0.3, 1],
-        }}
-        className="absolute h-7 w-28 rounded-pill border border-accent-2/75 bg-accent/15"
-      />
-      <motion.div
-        initial={{ y: 158, scaleX: 0.18, scaleY: 0.4, opacity: 0 }}
-        animate={{
-          y: 158,
-          scaleX: [0.18, 1.25, 1.65],
-          scaleY: [0.4, 1.1, 1.35],
-          opacity: [0, 0.5, 0],
-        }}
-        transition={{
-          duration: 0.56,
-          delay: 1.12,
-          times: [0, 0.4, 1],
-          ease: [0.16, 1, 0.3, 1],
-        }}
-        className="absolute h-7 w-32 rounded-pill border border-accent/60"
-      />
+// Physically shaded water drawn in SVG, driven per frame by waterScene().
+function RelayDropBurst({
+  reducedMotion,
+  composerSize,
+  onDone,
+}: {
+  reducedMotion: boolean;
+  composerSize: { width: number; height: number };
+  onDone: () => void;
+}) {
+  if (reducedMotion) return null;
+  return (
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-30">
+      <WaterBurstSvg geometry={composerSize} onDone={onDone} />
     </div>
   );
 }
@@ -160,6 +89,10 @@ export function DropComposer({
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
+  const composerBoxRef = useRef<HTMLDivElement | null>(null);
+  const turbulenceRef = useRef<SVGFETurbulenceElement | null>(null);
+  const displacementRef = useRef<SVGFEDisplacementMapElement | null>(null);
+  const [composerSize, setComposerSize] = useState({ width: 640, height: 180 });
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const dragDepthRef = useRef(0);
@@ -171,9 +104,39 @@ export function DropComposer({
     disabledRef.current = disabled;
   }, [disabled]);
 
+  // Drive the water-surface filter from the composer's own animation frames,
+  // so the ripple stays in lockstep with the swell and collapse.
+  function handleComposerFrame(latest: { scaleY?: number | string }) {
+    const turbulence = turbulenceRef.current;
+    const displacement = displacementRef.current;
+    if (!turbulence || !displacement) return;
+    const scaleY = Number(latest.scaleY ?? 1);
+    // Swell phase: scaleY 1 -> 1.07 builds the waves; collapse keeps them churning.
+    const strength = scaleY >= 1 ? Math.min((scaleY - 1) / 0.07, 1) : 1;
+    displacement.setAttribute('scale', (strength * 18).toFixed(1));
+    // Swell bands drift slowly, like light on a gently moving surface.
+    const churn = performance.now() / 220;
+    turbulence.setAttribute(
+      'baseFrequency',
+      `${(0.002 + strength * 0.001).toFixed(4)} ${(0.018 + Math.sin(churn) * 0.004).toFixed(4)}`
+    );
+  }
+
+  useEffect(() => {
+    const el = composerBoxRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      setComposerSize({ width: entry.contentRect.width, height: entry.contentRect.height });
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   useEffect(() => {
     if (relayBurstKey <= 0) return;
-    const timeoutMs = prefersReducedMotion ? 450 : 1560;
+    // The burst normally ends itself via onDone; this is only a safety net in
+    // case the tab is hidden and frames never arrive.
+    const timeoutMs = prefersReducedMotion ? 0 : RELAY_BURST.total * 1000 + 3000;
     const timer = window.setTimeout(() => {
       setClearedBurstKey(relayBurstKey);
     }, timeoutMs);
@@ -359,30 +322,37 @@ export function DropComposer({
   return (
     <section aria-label="Compose drop" className="space-y-3">
       {/* Unified Writing & File Drop Surface — entire surface accepts drag-and-drop */}
-      <div className="relative">
+      <div ref={composerBoxRef} className="relative">
+      <WaterSurfaceFilter turbulenceRef={turbulenceRef} displacementRef={displacementRef} />
       <MotionConfig reducedMotion="user">
       <motion.div
         animate={
           showBurst && !prefersReducedMotion
             ? {
-                scaleX: [1, 0.72, 0.42, 0.22],
-                scaleY: [1, 0.48, 0.28, 0.12],
-                y: [0, -6, 12, 148],
-                opacity: [1, 0.85, 0.35, 0],
+                scaleX: [1, 1.04, 0.82],
+                scaleY: [1, 1.07, 0.62],
+                filter: ['blur(0px)', 'blur(1.5px)', 'blur(7px)'],
+                opacity: [1, 0.85, 0],
               }
-            : { scaleX: 1, scaleY: 1, y: 0, opacity: 1 }
+            : { scaleX: 1, scaleY: 1, filter: 'blur(0px)', opacity: 1 }
         }
         transition={
           showBurst && !prefersReducedMotion
             ? {
-                duration: 1.48,
-                times: [0, 0.26, 0.62, 1],
-                ease: [0.22, 1, 0.36, 1],
+                duration: RELAY_BURST.collapseEnd,
+                times: [0, RELAY_BURST.swellEnd / RELAY_BURST.collapseEnd, 1],
+                ease: [EASE_STREAM, [0.7, 0, 0.84, 0]],
               }
-            : { duration: 0.3, ease: [0.22, 1, 0.36, 1] }
+            : {
+                scaleX: { type: 'spring', stiffness: 220, damping: 22 },
+                scaleY: { type: 'spring', stiffness: 220, damping: 22 },
+                default: { duration: 0.4, ease: EASE_STREAM },
+              }
         }
+        onUpdate={showBurst && !prefersReducedMotion ? handleComposerFrame : undefined}
         className={`origin-center ${showBurst ? 'pointer-events-none' : ''}`}
       >
+      <div style={showBurst && !prefersReducedMotion ? { filter: 'url(#relay-water-surface)' } : undefined}>
       <form
         ref={formRef}
         onSubmit={handleFormSubmit}
@@ -480,19 +450,21 @@ export function DropComposer({
           <AnimatePresence>
             {isDragging && (
               <motion.div
-                initial={{ opacity: 0, scale: 0.96, y: 4 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.96, y: 4 }}
-                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                className="pointer-events-none absolute inset-1 rounded-input border-2 border-dashed border-accent-2 bg-cotton/95 flex items-center justify-center gap-2 text-sm font-medium text-accent-2"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18, ease: EASE_STREAM }}
+                className="pointer-events-none absolute inset-1 overflow-hidden rounded-input border-2 border-dashed border-accent-2 bg-cotton/95 flex items-center justify-center gap-2 text-sm font-medium text-accent-2"
               >
-                <FileUp className="w-4 h-4" aria-hidden="true" />
-                <span>Drop to upload</span>
+                <span className="relay-ripple" />
+                <FileUp className="relative w-4 h-4" aria-hidden="true" />
+                <span className="relative">Drop to upload</span>
               </motion.div>
             )}
           </AnimatePresence>
         </MotionConfig>
       </form>
+      </div>
       </motion.div>
 
         <AnimatePresence>
@@ -500,6 +472,8 @@ export function DropComposer({
             <RelayDropBurst
               key={relayBurstKey}
               reducedMotion={Boolean(prefersReducedMotion)}
+              composerSize={composerSize}
+              onDone={() => setClearedBurstKey(relayBurstKey)}
             />
           )}
         </AnimatePresence>
@@ -553,7 +527,7 @@ export function DropComposer({
               </div>
               <div className="h-1 w-full rounded-pill bg-paper-2 overflow-hidden">
                 <div
-                  className={`h-full w-full origin-left transition-transform duration-150 ${
+                  className={`h-full w-full origin-left transition-transform duration-150 motion-reduce:transition-none ${
                     task.status === 'error'
                       ? 'bg-error'
                       : task.status === 'done'

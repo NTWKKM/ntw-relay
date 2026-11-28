@@ -37,6 +37,16 @@
   --color-board: oklch(22% 0.011 40);
   --color-board-type: oklch(96.5% 0.006 70);
   --color-paid: oklch(55.5% 0.15 33);
+  /* Water, daylight on paper: clear teal-grey, warm sun glint, Coral's own shade */
+  --color-water-sky: oklch(88% 0.035 220);
+  --color-water-body: oklch(74% 0.075 212);
+  --color-water-deep: oklch(44% 0.07 238);
+  --color-water-glint: oklch(99.5% 0.012 85);
+  --color-water-caustic: oklch(97.5% 0.05 80);
+  --color-water-shadow: oklch(32% 0.03 50);
+  --color-water-crest: oklch(58% 0.09 218);
+  --color-water-trough: oklch(40% 0.06 240);
+  --color-water-mask: oklch(100% 0 0);
   --font-display: "General Sans", var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
   --font-body: var(--font-display);
   --font-outlier: var(--font-geist-mono), "Geist Mono", ui-monospace, monospace;
@@ -88,6 +98,8 @@
   --display-weight: 600;
   --scrim: oklch(18% 0.01 40 / 0.54);
   --scrim-heavy: oklch(14% 0.008 40 / 0.92);
+  --water-shadow-strength: 1;
+  --water-ripple-gain: 0.9;
 }
 
 html.dark {
@@ -109,6 +121,15 @@ html.dark {
   --color-accent-2: oklch(68% 0.145 29);
   --color-focus: oklch(72% 0.15 30);
   --color-paid: oklch(70% 0.14 33);
+  /* Water, moonlit sea: deep navy, cool silver glint, crests catching moonlight */
+  --color-water-sky: oklch(66% 0.07 245);
+  --color-water-body: oklch(48% 0.09 228);
+  --color-water-deep: oklch(31% 0.06 245);
+  --color-water-glint: oklch(97% 0.02 250);
+  --color-water-caustic: oklch(82% 0.07 200);
+  --color-water-shadow: oklch(88% 0.03 240);
+  --color-water-crest: oklch(84% 0.06 215);
+  --color-water-trough: oklch(30% 0.06 248);
   --color-error: oklch(68% 0.17 27);
   --color-success: oklch(68% 0.12 150);
   --color-warning: oklch(74% 0.13 75);
@@ -119,6 +140,9 @@ html.dark {
   --press-groove: inset 0 1px 2px oklch(8% 0.008 45 / 0.6), 0 0 0 1px var(--color-rule);
   --scrim: oklch(8% 0.006 40 / 0.72);
   --scrim-heavy: oklch(8% 0.006 40 / 0.94);
+  /* At night the contact shadow reads as a faint reflection on the gloss */
+  --water-shadow-strength: 0.4;
+  --water-ripple-gain: 1;
 }
 
 @media (max-width: 60rem) {

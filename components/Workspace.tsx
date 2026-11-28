@@ -10,6 +10,7 @@ import React, {
 } from 'react';
 import Link from 'next/link';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
+import { RELAY_BURST } from '@/lib/relay-motion';
 import {
   Cloud,
   CloudOff,
@@ -121,7 +122,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
     if (relayBurstKey <= 0) return;
     const timer = window.setTimeout(() => {
       setClearedRelayFeedKey(relayBurstKey);
-    }, 1750);
+    }, RELAY_BURST.total * 1000 + 1500);
     return () => window.clearTimeout(timer);
   }, [relayBurstKey]);
   const [loadingCloudFeed, setLoadingCloudFeed] = useState(isCloudSynced);
