@@ -126,7 +126,11 @@ export function DropComposer({
     }
     if (restoreFocusRef.current) {
       restoreFocusRef.current = false;
-      if (!disabledRef.current) textareaRef.current?.focus();
+      // Only reclaim focus the burst took: if the user has since focused
+      // another control (e.g. feed search), leave it there.
+      const active = document.activeElement;
+      const focusIsUnclaimed = !active || active === document.body;
+      if (focusIsUnclaimed && !disabledRef.current) textareaRef.current?.focus();
     }
   }, [isComposerHidden]);
 
