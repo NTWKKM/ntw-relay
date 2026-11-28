@@ -747,8 +747,8 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
 
       {/* Unified Bottom Dock */}
       <footer className="shrink-0 border-t border-rule bg-paper coral-bottom-dock pt-3">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center flex-wrap gap-x-3 gap-y-1 min-w-0">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             <span className="font-display text-sm font-semibold tracking-tight text-ink whitespace-nowrap shrink-0">
               Relay
             </span>
@@ -757,7 +757,9 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
               {isCloudSynced ? (
                 <>
                   <Cloud className="w-3.5 h-3.5 text-success shrink-0" aria-hidden="true" />
-                  <span className="truncate max-w-[160px] sm:max-w-[200px]">{firebaseUser?.email}</span>
+                  <span className="truncate max-w-[96px] sm:max-w-[160px] md:max-w-[200px]">
+                    {firebaseUser?.email}
+                  </span>
                 </>
               ) : (
                 <>
@@ -767,12 +769,12 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
               )}
             </div>
 
-            <span className="hidden md:inline text-xs text-muted whitespace-nowrap">
+            <span className="hidden lg:inline text-xs text-muted whitespace-nowrap shrink-0">
               Max 10 MB/file
             </span>
 
             <div
-              className="flex items-center gap-2 text-xs text-muted tabular-nums"
+              className="flex items-center gap-2 text-xs text-muted tabular-nums shrink-0"
               title={
                 !isCloudSynced
                   ? `Local sandbox usage: ${formatBytes(storageUsage.usedBytes)} / 1 GB`
