@@ -502,8 +502,9 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
       : 0;
 
   return (
-    <div className="min-h-dvh bg-desk text-ink flex flex-col">
-      <main className="flex-1 w-full max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+    <div className="h-dvh bg-desk text-ink flex flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto">
+        <main className="w-full max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         <h1 className="sr-only">Relay</h1>
         {/* Email verification prompt (only shown when actually unverified) */}
         {isCloudSynced && firebaseUser && !firebaseUser.emailVerified && (
@@ -741,10 +742,11 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
             </div>
           )}
         </section>
-      </main>
+        </main>
+      </div>
 
       {/* Unified Bottom Dock */}
-      <footer className="border-t border-rule bg-paper coral-bottom-dock pt-3">
+      <footer className="shrink-0 border-t border-rule bg-paper coral-bottom-dock pt-3">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center flex-wrap gap-x-3 gap-y-1 min-w-0">
             <span className="font-display text-sm font-semibold tracking-tight text-ink whitespace-nowrap shrink-0">
@@ -770,7 +772,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
             </span>
 
             <div
-              className="hidden sm:flex items-center gap-2 text-xs text-muted tabular-nums"
+              className="flex items-center gap-2 text-xs text-muted tabular-nums"
               title={
                 !isCloudSynced
                   ? `Local sandbox usage: ${formatBytes(storageUsage.usedBytes)} / 1 GB`
@@ -794,7 +796,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
                       ? 'Storage usage unavailable'
                       : 'Loading storage usage'
                 }
-                className="w-16 h-1.5 rounded-pill bg-paper-3 overflow-hidden"
+                className="hidden sm:block w-16 h-1.5 rounded-pill bg-paper-3 overflow-hidden"
               >
                 <div
                   className={`h-full w-full origin-left rounded-pill transition-transform duration-300 ${storageBarFillClass}`}
