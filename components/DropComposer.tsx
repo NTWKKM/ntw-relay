@@ -1,7 +1,13 @@
 'use client';
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { AnimatePresence, MotionConfig, motion, useReducedMotion } from 'motion/react';
+import {
+  AnimatePresence,
+  MotionConfig,
+  motion,
+  useAnimationControls,
+  useReducedMotion,
+} from 'motion/react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -109,11 +115,13 @@ export function DropComposer({
 
   // `inert` drops focus to <body>; hand it back to the textarea when the
   // composer reappears, but only if the user was typing in it.
+  // Intent is captured in submitText before `sending` disables the controls;
+  // here it is only added to (e.g. a paste upload while typing), never cleared.
   const restoreFocusRef = useRef(false);
   useLayoutEffect(() => {
     if (isComposerHidden) {
       const active = document.activeElement;
-      restoreFocusRef.current = Boolean(active && formRef.current?.contains(active));
+      if (active && formRef.current?.contains(active)) restoreFocusRef.current = true;
       return;
     }
     if (restoreFocusRef.current) {
@@ -121,6 +129,38 @@ export function DropComposer({
       if (!disabledRef.current) textareaRef.current?.focus();
     }
   }, [isComposerHidden]);
+
+  // Imperative so every new burst key replays the swell, even while a previous
+  // burst is still showing; the form itself stays mounted and keeps its draft.
+  const composerControls = useAnimationControls();
+  useEffect(() => {
+    if (isComposerHidden) {
+      // `null` starts each keyframe track from the current value, so a replay
+      // mid-collapse continues smoothly instead of snapping back first.
+      void composerControls.start(
+        {
+          scaleX: [null, 1.04, 0.82],
+          scaleY: [null, 1.07, 0.62],
+          filter: [null, 'blur(1.5px)', 'blur(7px)'],
+          opacity: [null, 0.85, 0],
+        },
+        {
+          duration: RELAY_BURST.collapseEnd,
+          times: [0, RELAY_BURST.swellEnd / RELAY_BURST.collapseEnd, 1],
+          ease: [EASE_STREAM, [0.7, 0, 0.84, 0]],
+        }
+      );
+      return;
+    }
+    void composerControls.start(
+      { scaleX: 1, scaleY: 1, filter: 'blur(0px)', opacity: 1 },
+      {
+        scaleX: { type: 'spring', stiffness: 220, damping: 22 },
+        scaleY: { type: 'spring', stiffness: 220, damping: 22 },
+        default: { duration: 0.4, ease: EASE_STREAM },
+      }
+    );
+  }, [composerControls, isComposerHidden, relayBurstKey]);
 
   // Drive the water-surface filter from the composer's own animation frames,
   // so the ripple stays in lockstep with the swell and collapse.
@@ -188,6 +228,7 @@ export function DropComposer({
       return;
     }
 
+    restoreFocusRef.current = Boolean(formRef.current?.contains(document.activeElement));
     sendingRef.current = true;
     submitGenerationRef.current += 1;
     setSending(true);
@@ -209,6 +250,7 @@ export function DropComposer({
         textareaRef.current.style.height = '84px';
       }
     } catch (err) {
+      restoreFocusRef.current = false;
       setError(err instanceof Error ? err.message : 'Send failed.');
     } finally {
       sendingRef.current = false;
@@ -344,29 +386,7 @@ export function DropComposer({
       <WaterSurfaceFilter turbulenceRef={turbulenceRef} displacementRef={displacementRef} />
       <MotionConfig reducedMotion="user">
       <motion.div
-        animate={
-          showBurst && !prefersReducedMotion
-            ? {
-                scaleX: [1, 1.04, 0.82],
-                scaleY: [1, 1.07, 0.62],
-                filter: ['blur(0px)', 'blur(1.5px)', 'blur(7px)'],
-                opacity: [1, 0.85, 0],
-              }
-            : { scaleX: 1, scaleY: 1, filter: 'blur(0px)', opacity: 1 }
-        }
-        transition={
-          showBurst && !prefersReducedMotion
-            ? {
-                duration: RELAY_BURST.collapseEnd,
-                times: [0, RELAY_BURST.swellEnd / RELAY_BURST.collapseEnd, 1],
-                ease: [EASE_STREAM, [0.7, 0, 0.84, 0]],
-              }
-            : {
-                scaleX: { type: 'spring', stiffness: 220, damping: 22 },
-                scaleY: { type: 'spring', stiffness: 220, damping: 22 },
-                default: { duration: 0.4, ease: EASE_STREAM },
-              }
-        }
+        animate={composerControls}
         onUpdate={showBurst && !prefersReducedMotion ? handleComposerFrame : undefined}
         inert={isComposerHidden}
         className={`origin-center ${showBurst ? 'pointer-events-none' : ''}`}

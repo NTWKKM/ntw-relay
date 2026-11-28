@@ -36,6 +36,8 @@ interface DropCardProps {
   ref?: React.Ref<HTMLElement>;
   item: DropItem;
   isJustRelayed?: boolean;
+  /** performance.now() when the relay burst started. */
+  relayStartedAt?: number;
   onDelete: (item: DropItem) => Promise<void>;
   onToggleCode: (item: DropItem, nextIsCode: boolean) => Promise<void>;
   onOpenQr: (item: DropItem) => void;
@@ -65,6 +67,7 @@ export function DropCard({
   ref,
   item,
   isJustRelayed = false,
+  relayStartedAt = 0,
   onDelete,
   onToggleCode,
   onOpenQr,
@@ -75,6 +78,7 @@ export function DropCard({
   const [downloadLabel, setDownloadLabel] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [imgBroken, setImgBroken] = useState(false);
+  const [mountedAt] = useState(() => performance.now());
 
   const isCode = item.isCode ?? looksLikeCode(item.content);
   const itemDescriptor = item.fileName || item.content.slice(0, 32) || item.id;
@@ -119,7 +123,10 @@ export function DropCard({
   }
 
   const shouldAnimateCatch = isJustRelayed && !prefersReducedMotion;
-  const catchAt = RELAY_BURST.landAt + 0.06;
+  // Catch at impact measured from burst start; a card mounted mid-burst only
+  // waits for the remainder, and one mounted after impact does not wait.
+  const elapsedAtMount = Math.max(0, mountedAt - relayStartedAt) / 1000;
+  const catchAt = Math.max(0, RELAY_BURST.landAt + 0.06 - elapsedAtMount);
 
   return (
     <motion.article

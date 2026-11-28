@@ -108,6 +108,8 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
   // IDs created by the most recent successful send, so the feed highlights
   // exactly those cards regardless of the active filter or search.
   const [justRelayedIds, setJustRelayedIds] = useState<ReadonlySet<string>>(() => new Set());
+  // performance.now() at burst start, so cards mounted mid-burst can catch on time.
+  const [relayStartedAt, setRelayStartedAt] = useState(0);
   const isRelayFeedCatching = relayBurstKey > 0 && clearedRelayFeedKey !== relayBurstKey;
   const sessionLargeLocalItemsRef = useRef<DropItem[]>(sessionLargeLocalItems);
 
@@ -187,6 +189,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
 
   const markRelayed = useCallback((ids: string[]) => {
     setJustRelayedIds(new Set(ids));
+    setRelayStartedAt(performance.now());
     setRelayBurstKey((k) => k + 1);
   }, []);
 
@@ -532,7 +535,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
 
   return (
     <div className="h-dvh bg-desk text-ink flex flex-col overflow-hidden">
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <main className="w-full max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         <h1 className="sr-only">Relay</h1>
         {/* Email verification prompt (only shown when actually unverified) */}
@@ -763,6 +766,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
                       key={item.id}
                       item={item}
                       isJustRelayed={isRelayFeedCatching && justRelayedIds.has(item.id)}
+                      relayStartedAt={relayStartedAt}
                       onDelete={handleDeleteItem}
                       onToggleCode={handleToggleCode}
                       onOpenQr={handleOpenItemQr}
