@@ -608,7 +608,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
                     {active && (
                       <motion.span
                         layoutId="relay-filter-pill"
-                        transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                        transition={{ type: 'spring', stiffness: 320, damping: 30, mass: 0.85 }}
                         className="absolute inset-0 rounded-input bg-cotton shadow-card"
                       />
                     )}
@@ -716,7 +716,8 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
               {[0, 1, 2].map((i) => (
                 <div
                   key={i}
-                  className="h-28 rounded-card coral-stock animate-pulse"
+                  style={{ animationDelay: `${i * 180}ms` }}
+                  className="h-28 rounded-card coral-stock relay-tide"
                 />
               ))}
             </div>

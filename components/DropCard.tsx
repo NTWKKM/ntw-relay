@@ -125,8 +125,8 @@ export function DropCard({
       layout="position"
       initial={
         shouldAnimateCatch
-          ? { opacity: 0, y: -28, scale: 0.94 }
-          : { opacity: 0, y: 6, scale: 0.99 }
+          ? { opacity: 0, y: -20, scale: 0.955 }
+          : { opacity: 0, y: 10, scale: 0.985 }
       }
       animate={
         deleting && !prefersReducedMotion
@@ -137,34 +137,42 @@ export function DropCard({
         prefersReducedMotion
           ? { opacity: 0, transition: { duration: 0.24 } }
           : {
-              opacity: [1, 0.95, 0.85, 0],
-              scaleX: [1, 0.94, 0.72, 0.28],
-              scaleY: [1, 0.14, 0.05, 0.02],
-              y: [0, -2, -6, -18],
+              opacity: [1, 0.72, 0],
+              scale: [1, 0.96, 0.88],
+              y: [0, -6, -16],
               transition: {
-                duration: 0.95,
-                times: [0, 0.42, 0.7, 1],
-                ease: [0.4, 0, 0.2, 1],
+                duration: 0.42,
+                times: [0, 0.45, 1],
+                ease: [0.22, 1, 0.36, 1],
               },
             }
       }
       transition={
         shouldAnimateCatch
-          ? { duration: 0.5, delay: 0.88, ease: [0.22, 1, 0.36, 1] }
-          : { duration: 0.24, ease: [0.16, 1, 0.3, 1] }
+          ? { duration: 0.55, delay: 0.86, ease: [0.22, 1, 0.36, 1] }
+          : { duration: 0.32, ease: [0.22, 1, 0.36, 1] }
       }
       data-testid="drop-card"
       data-drop-type={item.type}
       className="relative group rounded-card coral-stock coral-stock-interactive px-4 sm:px-5 py-4 space-y-3 origin-center"
     >
       {shouldAnimateCatch && (
-        <motion.div
-          aria-hidden="true"
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: [0, 0.95, 0], scale: [0.98, 1.015, 1] }}
-          transition={{ duration: 0.65, delay: 1.0, ease: [0.16, 1, 0.3, 1] }}
-          className="pointer-events-none absolute inset-0 rounded-card border-2 border-accent-2"
-        />
+        <>
+          <motion.div
+            aria-hidden="true"
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: [0, 0.9, 0], scale: [0.97, 1.015, 1.03] }}
+            transition={{ duration: 0.68, delay: 0.98, ease: [0.22, 1, 0.36, 1] }}
+            className="pointer-events-none absolute inset-0 rounded-card border-2 border-accent-2"
+          />
+          <motion.div
+            aria-hidden="true"
+            initial={{ opacity: 0, scale: 0.99 }}
+            animate={{ opacity: [0, 0.55, 0], scale: [0.99, 1.035, 1.06] }}
+            transition={{ duration: 0.82, delay: 1.08, ease: [0.22, 1, 0.36, 1] }}
+            className="pointer-events-none absolute inset-0 rounded-card border border-accent"
+          />
+        </>
       )}
       {deleting && !prefersReducedMotion && (
         <motion.div

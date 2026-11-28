@@ -36,12 +36,13 @@ function RelayDropBurst({ reducedMotion }: { reducedMotion: boolean }) {
     );
   }
 
-  const speedLines = [
-    { x: -58, h: 'h-12', delay: 0.16, tone: 'bg-accent-2/70' },
-    { x: -24, h: 'h-16', delay: 0.2, tone: 'bg-ink/45' },
-    { x: 0, h: 'h-24', delay: 0.14, tone: 'bg-accent-2' },
-    { x: 24, h: 'h-16', delay: 0.22, tone: 'bg-ink/45' },
-    { x: 58, h: 'h-12', delay: 0.18, tone: 'bg-accent-2/70' },
+  // Water-stream filaments drifting with gentle lateral wave motion into the feed
+  const streamCurrents = [
+    { x: -56, sway: -8, h: 'h-14', delay: 0.14, tone: 'bg-accent/70' },
+    { x: -24, sway: 7, h: 'h-20', delay: 0.18, tone: 'bg-ink/40' },
+    { x: 0, sway: -4, h: 'h-24', delay: 0.1, tone: 'bg-accent-2/90' },
+    { x: 24, sway: -7, h: 'h-20', delay: 0.2, tone: 'bg-ink/40' },
+    { x: 56, sway: 8, h: 'h-14', delay: 0.16, tone: 'bg-accent/70' },
   ];
 
   return (
@@ -49,71 +50,96 @@ function RelayDropBurst({ reducedMotion }: { reducedMotion: boolean }) {
       aria-hidden="true"
       className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center overflow-visible"
     >
-      {/* 1. Soft concentric seal ring as composer folds */}
+      {/* 1. Cosmic orbital horizon ring expanding & rotating as composer releases payload */}
       <motion.div
-        initial={{ scale: 0.88, opacity: 0.7 }}
-        animate={{ scale: 1.12, opacity: 0 }}
-        transition={{ duration: 0.48, ease: [0.16, 1, 0.3, 1] }}
-        className="absolute inset-0 rounded-card border border-accent-2/50"
+        initial={{ scale: 0.72, rotate: -18, opacity: 0.75 }}
+        animate={{ scale: 1.24, rotate: 24, opacity: 0 }}
+        transition={{ duration: 0.62, ease: [0.22, 1, 0.36, 1] }}
+        className="absolute h-28 w-28 rounded-full border border-accent-2/55"
       />
 
-      {/* 2. Vertical speed-lines streaking down to guide the eye into the card below */}
-      {speedLines.map((line) => (
+      {/* 2. Sinuous water-stream currents cascading downward into the feed */}
+      {streamCurrents.map((stream) => (
         <motion.span
-          key={line.x}
-          initial={{ y: -24, scaleY: 0.2, opacity: 0 }}
+          key={stream.x}
+          initial={{ x: stream.x, y: -22, scaleY: 0.2, opacity: 0 }}
           animate={{
-            y: [-24, 18, 122, 168],
-            scaleY: [0.2, 1.4, 1.65, 0.3],
-            opacity: [0, 0.95, 0.85, 0],
+            x: [stream.x, stream.x + stream.sway, stream.x - stream.sway * 0.5, stream.x],
+            y: [-22, 22, 118, 166],
+            scaleY: [0.2, 1.35, 1.6, 0.25],
+            opacity: [0, 0.9, 0.8, 0],
           }}
           transition={{
-            duration: 1.38,
-            delay: line.delay,
-            times: [0, 0.28, 0.76, 1],
+            duration: 1.42,
+            delay: stream.delay,
+            times: [0, 0.3, 0.76, 1],
             ease: [0.22, 1, 0.36, 1],
           }}
-          style={{ x: line.x }}
-          className={`absolute w-0.5 origin-top rounded-pill ${line.h} ${line.tone}`}
+          className={`absolute w-0.5 origin-top rounded-pill ${stream.h} ${stream.tone}`}
         />
       ))}
 
-      {/* 3. Wordless geometric coral capsule: folds from diamond into a streamlined drop */}
+      {/* 3. Celestial droplet core with orbiting satellite descending through the stream */}
       <motion.div
-        initial={{ scale: 0.4, rotate: 45, y: -6, opacity: 0 }}
+        initial={{ scale: 0.45, y: -8, opacity: 0 }}
         animate={{
-          scaleX: [0.4, 1.1, 0.95, 0.65, 0.45],
-          scaleY: [0.4, 1.1, 1.15, 1.6, 0.6],
-          rotate: [45, 45, 0, 0, 0],
-          y: [-6, -8, -4, 96, 164],
+          scaleX: [0.45, 1.06, 0.96, 0.78, 0.55],
+          scaleY: [0.45, 1.06, 1.12, 1.32, 0.65],
+          y: [-8, -10, 4, 98, 164],
           opacity: [0, 1, 1, 0.95, 0],
         }}
         transition={{
-          duration: 1.45,
-          times: [0.1, 0.28, 0.46, 0.8, 1],
+          duration: 1.46,
+          times: [0.08, 0.26, 0.46, 0.8, 1],
           ease: [0.22, 1, 0.36, 1],
         }}
         className="relative flex items-center justify-center"
       >
-        <div className="h-8 w-8 rounded-input bg-accent-2 border-2 border-ink shadow-[0_0_0_4px_var(--color-accent)]" />
+        {/* Orbiting ring + satellite moon */}
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1.4, ease: 'linear' }}
+          className="absolute h-11 w-11 rounded-full border border-ink/35"
+        >
+          <span className="absolute -top-1 left-1/2 -translate-x-1/2 h-1.5 w-1.5 rounded-full bg-ink" />
+        </motion.div>
+
+        {/* Liquid droplet nucleus */}
+        <div className="h-6 w-6 rounded-full bg-accent-2 border-2 border-ink shadow-[0_0_0_4px_var(--color-accent)]" />
       </motion.div>
 
-      {/* 4. Soft ripple where the drop meets the feed card below */}
+      {/* 4. Two concentric water-surface ripples where the droplet meets the feed */}
       <motion.div
-        initial={{ y: 158, scaleX: 0.25, scaleY: 0.5, opacity: 0 }}
+        initial={{ y: 158, scaleX: 0.22, scaleY: 0.45, opacity: 0 }}
         animate={{
           y: 158,
-          scaleX: [0.25, 1.1, 1.35],
-          scaleY: [0.5, 1, 1.2],
+          scaleX: [0.22, 1.05, 1.35],
+          scaleY: [0.45, 0.95, 1.15],
           opacity: [0, 0.75, 0],
         }}
         transition={{
-          duration: 0.46,
-          delay: 1.04,
-          times: [0, 0.45, 1],
+          duration: 0.48,
+          delay: 1.02,
+          times: [0, 0.42, 1],
           ease: [0.16, 1, 0.3, 1],
         }}
-        className="absolute h-7 w-28 rounded-pill border border-accent-2/70 bg-accent/15"
+        className="absolute h-7 w-28 rounded-pill border border-accent-2/75 bg-accent/15"
+      />
+      <motion.div
+        initial={{ y: 158, scaleX: 0.18, scaleY: 0.4, opacity: 0 }}
+        animate={{
+          y: 158,
+          scaleX: [0.18, 1.25, 1.65],
+          scaleY: [0.4, 1.1, 1.35],
+          opacity: [0, 0.5, 0],
+        }}
+        transition={{
+          duration: 0.56,
+          delay: 1.12,
+          times: [0, 0.4, 1],
+          ease: [0.16, 1, 0.3, 1],
+        }}
+        className="absolute h-7 w-32 rounded-pill border border-accent/60"
       />
     </div>
   );
@@ -339,10 +365,10 @@ export function DropComposer({
         animate={
           showBurst && !prefersReducedMotion
             ? {
-                scaleX: [1, 0.62, 0.36, 0.26],
-                scaleY: [1, 0.28, 0.22, 0.14],
-                y: [0, 0, -6, 152],
-                opacity: [1, 0.75, 0.25, 0],
+                scaleX: [1, 0.72, 0.42, 0.22],
+                scaleY: [1, 0.48, 0.28, 0.12],
+                y: [0, -6, 12, 148],
+                opacity: [1, 0.85, 0.35, 0],
               }
             : { scaleX: 1, scaleY: 1, y: 0, opacity: 1 }
         }
@@ -350,10 +376,10 @@ export function DropComposer({
           showBurst && !prefersReducedMotion
             ? {
                 duration: 1.48,
-                times: [0, 0.24, 0.62, 1],
+                times: [0, 0.26, 0.62, 1],
                 ease: [0.22, 1, 0.36, 1],
               }
-            : { duration: 0.26, ease: [0.16, 1, 0.3, 1] }
+            : { duration: 0.3, ease: [0.22, 1, 0.36, 1] }
         }
         className={`origin-center ${showBurst ? 'pointer-events-none' : ''}`}
       >
@@ -454,10 +480,10 @@ export function DropComposer({
           <AnimatePresence>
             {isDragging && (
               <motion.div
-                initial={{ opacity: 0, scale: 0.985 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.985 }}
-                transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                initial={{ opacity: 0, scale: 0.96, y: 4 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 4 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                 className="pointer-events-none absolute inset-1 rounded-input border-2 border-dashed border-accent-2 bg-cotton/95 flex items-center justify-center gap-2 text-sm font-medium text-accent-2"
               >
                 <FileUp className="w-4 h-4" aria-hidden="true" />

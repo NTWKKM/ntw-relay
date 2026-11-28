@@ -14,6 +14,8 @@
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-stream: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-orbit: cubic-bezier(0.37, 0, 0.63, 1);
   --color-error: oklch(52% 0.19 27);
   --color-success: oklch(46% 0.13 150);
   --color-warning: oklch(56% 0.14 70);
