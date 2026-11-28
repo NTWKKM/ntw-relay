@@ -10,6 +10,7 @@ import React, {
 } from 'react';
 import Link from 'next/link';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
+import { RELAY_BURST } from '@/lib/relay-motion';
 import {
   Cloud,
   CloudOff,
@@ -102,6 +103,14 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
   );
   const [cloudItems, setCloudItems] = useState<DropItem[]>([]);
   const [sessionLargeLocalItems, setSessionLargeLocalItems] = useState<DropItem[]>([]);
+  const [relayBurstKey, setRelayBurstKey] = useState(0);
+  const [clearedRelayFeedKey, setClearedRelayFeedKey] = useState(0);
+  // IDs created by the most recent successful send, so the feed highlights
+  // exactly those cards regardless of the active filter or search.
+  const [justRelayedIds, setJustRelayedIds] = useState<ReadonlySet<string>>(() => new Set());
+  // performance.now() at burst start, so cards mounted mid-burst can catch on time.
+  const [relayStartedAt, setRelayStartedAt] = useState(0);
+  const isRelayFeedCatching = relayBurstKey > 0 && clearedRelayFeedKey !== relayBurstKey;
   const sessionLargeLocalItemsRef = useRef<DropItem[]>(sessionLargeLocalItems);
 
   useEffect(() => {
@@ -113,6 +122,14 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
       sessionLargeLocalItemsRef.current.forEach((it) => revokeBlobUrl(it.downloadUrl));
     };
   }, []);
+
+  useEffect(() => {
+    if (relayBurstKey <= 0) return;
+    const timer = window.setTimeout(() => {
+      setClearedRelayFeedKey(relayBurstKey);
+    }, RELAY_BURST.total * 1000 + 1500);
+    return () => window.clearTimeout(timer);
+  }, [relayBurstKey]);
   const [loadingCloudFeed, setLoadingCloudFeed] = useState(isCloudSynced);
   const [globalStorageBytes, setGlobalStorageBytes] = useState<number | null>(null);
   const [globalStorageStatus, setGlobalStorageStatus] = useState<'loading' | 'ready' | 'unavailable'>(
@@ -170,11 +187,18 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
     };
   }, [authReady, isCloudSynced, firebaseUserUid]);
 
+  const markRelayed = useCallback((ids: string[]) => {
+    setJustRelayedIds(new Set(ids));
+    setRelayStartedAt(performance.now());
+    setRelayBurstKey((k) => k + 1);
+  }, []);
+
   const handleSendText = useCallback(
     async (text: string) => {
       setSyncNotice(null);
       if (isCloudSynced && firebaseUser) {
-        await createCloudTextDrop(firebaseUser.uid, text);
+        const dropId = await createCloudTextDrop(firebaseUser.uid, text);
+        markRelayed([dropId]);
         return;
       }
 
@@ -191,14 +215,16 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
       const next = [newItem, ...getLocalDemoSnapshot()];
       const saved = saveLocalDemoItems(next);
       if (!saved.ok && saved.error) setSyncNotice(saved.error);
+      markRelayed([newItem.id]);
     },
-    [isCloudSynced, firebaseUser]
+    [isCloudSynced, firebaseUser, markRelayed]
   );
 
   const handleUploadFiles = useCallback(
     async (files: File[]) => {
       if (files.length === 0) return;
       setSyncNotice(null);
+      const relayedIds: string[] = [];
 
       await Promise.all(
         files.map(async (file) => {
@@ -221,7 +247,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
 
           try {
             if (isCloudSynced && firebaseUser) {
-              await uploadCloudFileDrop(firebaseUser.uid, file, {
+              const dropId = await uploadCloudFileDrop(firebaseUser.uid, file, {
                 onProgress: ({ bytesTransferred, progress, speedBps }) => {
                   setUploads((prev) =>
                     prev.map((t) =>
@@ -232,6 +258,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
                   );
                 },
               });
+              relayedIds.push(dropId);
             } else {
               const isImage = file.type.startsWith('image/');
               let dataUrl: string | undefined;
@@ -277,6 +304,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
               } else {
                 setSessionLargeLocalItems((prev) => [newItem, ...prev]);
               }
+              relayedIds.push(newItem.id);
             }
 
             setUploads((prev) =>
@@ -299,8 +327,12 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
           }
         })
       );
+
+      if (relayedIds.length > 0) {
+        markRelayed(relayedIds);
+      }
     },
-    [isCloudSynced, firebaseUser]
+    [isCloudSynced, firebaseUser, markRelayed]
   );
 
   // Global Cmd/Ctrl + V direct screenshot/image upload anywhere on page
@@ -503,7 +535,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
 
   return (
     <div className="h-dvh bg-desk text-ink flex flex-col overflow-hidden">
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <main className="w-full max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         <h1 className="sr-only">Relay</h1>
         {/* Email verification prompt (only shown when actually unverified) */}
@@ -536,6 +568,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
           onSendText={handleSendText}
           onUploadFiles={handleUploadFiles}
           uploads={uploads}
+          relayBurstKey={relayBurstKey}
         />
 
         {/* Transient Notice / Error */}
@@ -588,7 +621,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
                     {active && (
                       <motion.span
                         layoutId="relay-filter-pill"
-                        transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                        transition={{ type: 'spring', stiffness: 320, damping: 30, mass: 0.85 }}
                         className="absolute inset-0 rounded-input bg-cotton shadow-card"
                       />
                     )}
@@ -696,7 +729,8 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
               {[0, 1, 2].map((i) => (
                 <div
                   key={i}
-                  className="h-28 rounded-card coral-stock animate-pulse"
+                  style={{ animationDelay: `${i * 180}ms` }}
+                  className="h-28 rounded-card coral-stock relay-tide"
                 />
               ))}
             </div>
@@ -731,6 +765,8 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
                     <DropCard
                       key={item.id}
                       item={item}
+                      isJustRelayed={isRelayFeedCatching && justRelayedIds.has(item.id)}
+                      relayStartedAt={relayStartedAt}
                       onDelete={handleDeleteItem}
                       onToggleCode={handleToggleCode}
                       onOpenQr={handleOpenItemQr}

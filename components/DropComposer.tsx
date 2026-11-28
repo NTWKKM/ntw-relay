@@ -1,7 +1,13 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
-import { AnimatePresence, MotionConfig, motion } from 'motion/react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  AnimatePresence,
+  MotionConfig,
+  motion,
+  useAnimationControls,
+  useReducedMotion,
+} from 'motion/react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -12,12 +18,66 @@ import {
 } from 'lucide-react';
 import { formatBytes, isImeComposing, MAX_TEXT_LENGTH } from '@/lib/drop-utils';
 import type { UploadTaskState } from '@/lib/types';
+import { WaterBurstSvg } from '@/components/WaterBurstSvg';
+import { EASE_STREAM, RELAY_BURST } from '@/lib/relay-motion';
 
 interface DropComposerProps {
   onSendText: (text: string) => Promise<void>;
   onUploadFiles: (files: File[]) => Promise<void>;
   uploads: UploadTaskState[];
   disabled?: boolean;
+  relayBurstKey?: number;
+}
+
+// Hidden SVG filter: low-frequency turbulence displaces the composer in
+// horizontal bands, like a reflection on a disturbed water surface.
+function WaterSurfaceFilter({
+  turbulenceRef,
+  displacementRef,
+}: {
+  turbulenceRef: React.Ref<SVGFETurbulenceElement>;
+  displacementRef: React.Ref<SVGFEDisplacementMapElement>;
+}) {
+  return (
+    <svg aria-hidden="true" width="0" height="0" className="absolute">
+      <filter id="relay-water-surface" x="-10%" y="-20%" width="120%" height="140%">
+        <feTurbulence
+          ref={turbulenceRef}
+          type="turbulence"
+          baseFrequency="0.002 0.018"
+          numOctaves={1}
+          seed={7}
+          result="swell"
+        />
+        <feDisplacementMap
+          ref={displacementRef}
+          in="SourceGraphic"
+          in2="swell"
+          scale="0"
+          xChannelSelector="R"
+          yChannelSelector="G"
+        />
+      </filter>
+    </svg>
+  );
+}
+
+// Physically shaded water drawn in SVG, driven per frame by waterScene().
+function RelayDropBurst({
+  reducedMotion,
+  composerSize,
+  onDone,
+}: {
+  reducedMotion: boolean;
+  composerSize: { width: number; height: number };
+  onDone: () => void;
+}) {
+  if (reducedMotion) return null;
+  return (
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-30">
+      <WaterBurstSvg geometry={composerSize} onDone={onDone} />
+    </div>
+  );
 }
 
 export function DropComposer({
@@ -25,12 +85,23 @@ export function DropComposer({
   onUploadFiles,
   uploads,
   disabled = false,
+  relayBurstKey = 0,
 }: DropComposerProps) {
+  const prefersReducedMotion = useReducedMotion();
+  const [clearedBurstKey, setClearedBurstKey] = useState<number>(0);
+  const showBurst = relayBurstKey > 0 && clearedBurstKey !== relayBurstKey;
+  // While the burst plays the composer is fully transparent; make it inert so
+  // keyboard focus and input cannot reach an invisible draft.
+  const isComposerHidden = showBurst && !prefersReducedMotion;
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
+  const composerBoxRef = useRef<HTMLDivElement | null>(null);
+  const turbulenceRef = useRef<SVGFETurbulenceElement | null>(null);
+  const displacementRef = useRef<SVGFEDisplacementMapElement | null>(null);
+  const [composerSize, setComposerSize] = useState({ width: 640, height: 180 });
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const dragDepthRef = useRef(0);
@@ -41,6 +112,98 @@ export function DropComposer({
   useEffect(() => {
     disabledRef.current = disabled;
   }, [disabled]);
+
+  // `inert` drops focus to <body>; hand it back to the textarea when the
+  // composer reappears, but only if the user was typing in it.
+  // Intent is captured in submitText before `sending` disables the controls;
+  // here it is only added to (e.g. a paste upload while typing), never cleared.
+  const restoreFocusRef = useRef(false);
+  useLayoutEffect(() => {
+    if (isComposerHidden) {
+      const active = document.activeElement;
+      if (active && formRef.current?.contains(active)) restoreFocusRef.current = true;
+      return;
+    }
+    if (restoreFocusRef.current) {
+      restoreFocusRef.current = false;
+      // Only reclaim focus the burst took: if the user has since focused
+      // another control (e.g. feed search), leave it there.
+      const active = document.activeElement;
+      const focusIsUnclaimed = !active || active === document.body;
+      if (focusIsUnclaimed && !disabledRef.current) textareaRef.current?.focus();
+    }
+  }, [isComposerHidden]);
+
+  // Imperative so every new burst key replays the swell, even while a previous
+  // burst is still showing; the form itself stays mounted and keeps its draft.
+  const composerControls = useAnimationControls();
+  useEffect(() => {
+    if (isComposerHidden) {
+      // `null` starts each keyframe track from the current value, so a replay
+      // mid-collapse continues smoothly instead of snapping back first.
+      void composerControls.start(
+        {
+          scaleX: [null, 1.04, 0.82],
+          scaleY: [null, 1.07, 0.62],
+          filter: [null, 'blur(1.5px)', 'blur(7px)'],
+          opacity: [null, 0.85, 0],
+        },
+        {
+          duration: RELAY_BURST.collapseEnd,
+          times: [0, RELAY_BURST.swellEnd / RELAY_BURST.collapseEnd, 1],
+          ease: [EASE_STREAM, [0.7, 0, 0.84, 0]],
+        }
+      );
+      return;
+    }
+    void composerControls.start(
+      { scaleX: 1, scaleY: 1, filter: 'blur(0px)', opacity: 1 },
+      {
+        scaleX: { type: 'spring', stiffness: 220, damping: 22 },
+        scaleY: { type: 'spring', stiffness: 220, damping: 22 },
+        default: { duration: 0.4, ease: EASE_STREAM },
+      }
+    );
+  }, [composerControls, isComposerHidden, relayBurstKey]);
+
+  // Drive the water-surface filter from the composer's own animation frames,
+  // so the ripple stays in lockstep with the swell and collapse.
+  function handleComposerFrame(latest: { scaleY?: number | string }) {
+    const turbulence = turbulenceRef.current;
+    const displacement = displacementRef.current;
+    if (!turbulence || !displacement) return;
+    const scaleY = Number(latest.scaleY ?? 1);
+    // Swell phase: scaleY 1 -> 1.07 builds the waves; collapse keeps them churning.
+    const strength = scaleY >= 1 ? Math.min((scaleY - 1) / 0.07, 1) : 1;
+    displacement.setAttribute('scale', (strength * 18).toFixed(1));
+    // Swell bands drift slowly, like light on a gently moving surface.
+    const churn = performance.now() / 220;
+    turbulence.setAttribute(
+      'baseFrequency',
+      `${(0.002 + strength * 0.001).toFixed(4)} ${(0.018 + Math.sin(churn) * 0.004).toFixed(4)}`
+    );
+  }
+
+  useEffect(() => {
+    const el = composerBoxRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      setComposerSize({ width: entry.contentRect.width, height: entry.contentRect.height });
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (relayBurstKey <= 0) return;
+    // The burst normally ends itself via onDone; this is only a safety net in
+    // case the tab is hidden and frames never arrive.
+    const timeoutMs = prefersReducedMotion ? 0 : RELAY_BURST.total * 1000 + 3000;
+    const timer = window.setTimeout(() => {
+      setClearedBurstKey(relayBurstKey);
+    }, timeoutMs);
+    return () => window.clearTimeout(timer);
+  }, [relayBurstKey, prefersReducedMotion]);
 
   // Fallback JS auto-grow strictly for browsers without native CSS `field-sizing: content`
   useEffect(() => {
@@ -69,6 +232,7 @@ export function DropComposer({
       return;
     }
 
+    restoreFocusRef.current = Boolean(formRef.current?.contains(document.activeElement));
     sendingRef.current = true;
     submitGenerationRef.current += 1;
     setSending(true);
@@ -90,6 +254,7 @@ export function DropComposer({
         textareaRef.current.style.height = '84px';
       }
     } catch (err) {
+      restoreFocusRef.current = false;
       setError(err instanceof Error ? err.message : 'Send failed.');
     } finally {
       sendingRef.current = false;
@@ -221,6 +386,16 @@ export function DropComposer({
   return (
     <section aria-label="Compose drop" className="space-y-3">
       {/* Unified Writing & File Drop Surface — entire surface accepts drag-and-drop */}
+      <div ref={composerBoxRef} className="relative">
+      <WaterSurfaceFilter turbulenceRef={turbulenceRef} displacementRef={displacementRef} />
+      <MotionConfig reducedMotion="user">
+      <motion.div
+        animate={composerControls}
+        onUpdate={showBurst && !prefersReducedMotion ? handleComposerFrame : undefined}
+        inert={isComposerHidden}
+        className={`origin-center ${showBurst ? 'pointer-events-none' : ''}`}
+      >
+      <div style={showBurst && !prefersReducedMotion ? { filter: 'url(#relay-water-surface)' } : undefined}>
       <form
         ref={formRef}
         onSubmit={handleFormSubmit}
@@ -318,19 +493,35 @@ export function DropComposer({
           <AnimatePresence>
             {isDragging && (
               <motion.div
-                initial={{ opacity: 0, scale: 0.985 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.985 }}
-                transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                className="pointer-events-none absolute inset-1 rounded-input border-2 border-dashed border-accent-2 bg-cotton/95 flex items-center justify-center gap-2 text-sm font-medium text-accent-2"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18, ease: EASE_STREAM }}
+                className="pointer-events-none absolute inset-1 overflow-hidden rounded-input border-2 border-dashed border-accent-2 bg-cotton/95 flex items-center justify-center gap-2 text-sm font-medium text-accent-2"
               >
-                <FileUp className="w-4 h-4" aria-hidden="true" />
-                <span>Drop to upload</span>
+                <span className="relay-ripple" />
+                <FileUp className="relative w-4 h-4" aria-hidden="true" />
+                <span className="relative">Drop to upload</span>
               </motion.div>
             )}
           </AnimatePresence>
         </MotionConfig>
       </form>
+      </div>
+      </motion.div>
+
+        <AnimatePresence>
+          {showBurst && (
+            <RelayDropBurst
+              key={relayBurstKey}
+              reducedMotion={Boolean(prefersReducedMotion)}
+              composerSize={composerSize}
+              onDone={() => setClearedBurstKey(relayBurstKey)}
+            />
+          )}
+        </AnimatePresence>
+      </MotionConfig>
+      </div>
 
       {/* Inline Validation Error */}
       {error && (
@@ -379,7 +570,7 @@ export function DropComposer({
               </div>
               <div className="h-1 w-full rounded-pill bg-paper-2 overflow-hidden">
                 <div
-                  className={`h-full w-full origin-left transition-transform duration-150 ${
+                  className={`h-full w-full origin-left transition-transform duration-150 motion-reduce:transition-none ${
                     task.status === 'error'
                       ? 'bg-error'
                       : task.status === 'done'
