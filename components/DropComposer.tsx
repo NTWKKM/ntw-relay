@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -314,20 +314,22 @@ export function DropComposer({
         </div>
 
         {/* Active Drag Overlay */}
-        <AnimatePresence>
-          {isDragging && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.985 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.985 }}
-              transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-              className="pointer-events-none absolute inset-1 rounded-input border-2 border-dashed border-accent-2 bg-cotton/95 flex items-center justify-center gap-2 text-sm font-medium text-accent-2"
-            >
-              <FileUp className="w-4 h-4" aria-hidden="true" />
-              <span>Drop to upload</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <MotionConfig reducedMotion="user">
+          <AnimatePresence>
+            {isDragging && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.985 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.985 }}
+                transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                className="pointer-events-none absolute inset-1 rounded-input border-2 border-dashed border-accent-2 bg-cotton/95 flex items-center justify-center gap-2 text-sm font-medium text-accent-2"
+              >
+                <FileUp className="w-4 h-4" aria-hidden="true" />
+                <span>Drop to upload</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </MotionConfig>
       </form>
 
       {/* Inline Validation Error */}

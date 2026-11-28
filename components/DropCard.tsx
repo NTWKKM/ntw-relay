@@ -32,6 +32,7 @@ import {
 import type { DropItem } from '@/lib/types';
 
 interface DropCardProps {
+  ref?: React.Ref<HTMLElement>;
   item: DropItem;
   onDelete: (item: DropItem) => Promise<void>;
   onToggleCode: (item: DropItem, nextIsCode: boolean) => Promise<void>;
@@ -59,6 +60,7 @@ function FileTypeIcon({ fileName, mimeType }: { fileName?: string; mimeType?: st
 }
 
 export function DropCard({
+  ref,
   item,
   onDelete,
   onToggleCode,
@@ -114,6 +116,7 @@ export function DropCard({
 
   return (
     <motion.article
+      ref={ref}
       layout="position"
       initial={{ opacity: 0, y: 6, scale: 0.99 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}

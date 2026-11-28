@@ -80,7 +80,7 @@ export function QrModal({ data, onClose }: QrModalProps) {
                     level="M"
                     bgColor="#FFFFFF"
                     fgColor="#181715"
-                    includeMargin={false}
+                    includeMargin
                   />
                 </div>
               </div>
