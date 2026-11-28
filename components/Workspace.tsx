@@ -9,7 +9,7 @@ import React, {
   useSyncExternalStore,
 } from 'react';
 import Link from 'next/link';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import {
   Cloud,
   CloudOff,
@@ -848,18 +848,20 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
             </div>
           ) : (
             <div className="space-y-3" data-testid="drop-feed">
-              <AnimatePresence mode="popLayout">
-                {filteredItems.map((item) => (
-                  <DropCard
-                    key={item.id}
-                    item={item}
-                    onDelete={handleDeleteItem}
-                    onToggleCode={handleToggleCode}
-                    onOpenQr={handleOpenItemQr}
-                    onOpenImage={setLightboxItem}
-                  />
-                ))}
-              </AnimatePresence>
+              <MotionConfig reducedMotion="user">
+                <AnimatePresence mode="popLayout">
+                  {filteredItems.map((item) => (
+                    <DropCard
+                      key={item.id}
+                      item={item}
+                      onDelete={handleDeleteItem}
+                      onToggleCode={handleToggleCode}
+                      onOpenQr={handleOpenItemQr}
+                      onOpenImage={setLightboxItem}
+                    />
+                  ))}
+                </AnimatePresence>
+              </MotionConfig>
             </div>
           )}
         </section>
