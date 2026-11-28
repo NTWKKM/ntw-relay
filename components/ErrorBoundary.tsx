@@ -32,21 +32,21 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: Error) {
-    console.error('NTW Relay boundary caught error:', error);
+    console.error('Relay boundary caught error:', error);
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-[#F5F2EB] text-[#181715] dark:bg-[#121110] dark:text-[#F3EFE8] flex items-center justify-center p-6">
-          <div className="w-full max-w-md rounded-xl bg-[#FCFBF8] dark:bg-[#1A1917] border border-[#E2DCD0] dark:border-[#2C2925] p-6 space-y-4">
-            <div className="flex items-center gap-3 text-[#B91C1C] dark:text-[#FCA5A5]">
+        <div className="min-h-dvh bg-desk text-ink flex items-center justify-center p-6">
+          <div className="w-full max-w-md rounded-card coral-stock p-6 space-y-4">
+            <div className="flex items-center gap-3 text-error">
               <AlertTriangle className="w-5 h-5 shrink-0" aria-hidden="true" />
-              <h1 className="font-[family-name:var(--font-display)] text-lg font-medium text-[#181715] dark:text-[#F3EFE8]">
+              <h1 className="font-display text-lg font-semibold text-ink">
                 Something went wrong
               </h1>
             </div>
-            <p className="text-sm text-[#5D5850] dark:text-[#A8A196] leading-relaxed break-words">
+            <p className="text-sm text-ink-2 leading-relaxed break-words">
               {this.state.message}
             </p>
             <button
@@ -55,10 +55,10 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                 this.setState({ hasError: false, message: '' });
                 window.location.reload();
               }}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#181715] dark:bg-[#F3EFE8] text-[#FCFBF8] dark:text-[#121110] text-sm font-medium hover:bg-[#2E2C28] dark:hover:bg-[#E2DBD0] transition-colors cursor-pointer"
+              className="coral-btn-ink inline-flex items-center gap-2 h-10 px-4 rounded-stock text-sm font-medium cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" aria-hidden="true" />
-              Reload NTW Relay
+              Reload Relay
             </button>
           </div>
         </div>

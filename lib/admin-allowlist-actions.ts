@@ -14,7 +14,7 @@ export async function submitPreapprovedEmail(params: {
 }): Promise<string> {
   const normalized = normalizeEmail(params.email);
   if (!isValidEmailFormat(normalized)) {
-    throw new Error('กรุณากรอกอีเมลให้ถูกต้อง');
+    throw new Error('Please enter a valid email address.');
   }
   const updateStatus = params.updateStatus ?? setAllowedUserStatus;
   await updateStatus({
