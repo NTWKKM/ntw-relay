@@ -102,6 +102,9 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
   );
   const [cloudItems, setCloudItems] = useState<DropItem[]>([]);
   const [sessionLargeLocalItems, setSessionLargeLocalItems] = useState<DropItem[]>([]);
+  const [relayBurstKey, setRelayBurstKey] = useState(0);
+  const [clearedRelayFeedKey, setClearedRelayFeedKey] = useState(0);
+  const isRelayFeedCatching = relayBurstKey > 0 && clearedRelayFeedKey !== relayBurstKey;
   const sessionLargeLocalItemsRef = useRef<DropItem[]>(sessionLargeLocalItems);
 
   useEffect(() => {
@@ -113,6 +116,14 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
       sessionLargeLocalItemsRef.current.forEach((it) => revokeBlobUrl(it.downloadUrl));
     };
   }, []);
+
+  useEffect(() => {
+    if (relayBurstKey <= 0) return;
+    const timer = window.setTimeout(() => {
+      setClearedRelayFeedKey(relayBurstKey);
+    }, 1750);
+    return () => window.clearTimeout(timer);
+  }, [relayBurstKey]);
   const [loadingCloudFeed, setLoadingCloudFeed] = useState(isCloudSynced);
   const [globalStorageBytes, setGlobalStorageBytes] = useState<number | null>(null);
   const [globalStorageStatus, setGlobalStorageStatus] = useState<'loading' | 'ready' | 'unavailable'>(
@@ -175,6 +186,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
       setSyncNotice(null);
       if (isCloudSynced && firebaseUser) {
         await createCloudTextDrop(firebaseUser.uid, text);
+        setRelayBurstKey((k) => k + 1);
         return;
       }
 
@@ -191,6 +203,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
       const next = [newItem, ...getLocalDemoSnapshot()];
       const saved = saveLocalDemoItems(next);
       if (!saved.ok && saved.error) setSyncNotice(saved.error);
+      setRelayBurstKey((k) => k + 1);
     },
     [isCloudSynced, firebaseUser]
   );
@@ -199,6 +212,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
     async (files: File[]) => {
       if (files.length === 0) return;
       setSyncNotice(null);
+      let anySucceeded = false;
 
       await Promise.all(
         files.map(async (file) => {
@@ -279,6 +293,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
               }
             }
 
+            anySucceeded = true;
             setUploads((prev) =>
               prev.map((t) =>
                 t.id === taskId
@@ -299,6 +314,10 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
           }
         })
       );
+
+      if (anySucceeded) {
+        setRelayBurstKey((k) => k + 1);
+      }
     },
     [isCloudSynced, firebaseUser]
   );
@@ -536,6 +555,7 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
           onSendText={handleSendText}
           onUploadFiles={handleUploadFiles}
           uploads={uploads}
+          relayBurstKey={relayBurstKey}
         />
 
         {/* Transient Notice / Error */}
@@ -727,10 +747,11 @@ export function Workspace({ forceLocalDemo = false }: WorkspaceProps) {
             <div className="space-y-3" data-testid="drop-feed">
               <MotionConfig reducedMotion="user">
                 <AnimatePresence mode="popLayout">
-                  {filteredItems.map((item) => (
+                  {filteredItems.map((item, index) => (
                     <DropCard
                       key={item.id}
                       item={item}
+                      isJustRelayed={index === 0 && isRelayFeedCatching}
                       onDelete={handleDeleteItem}
                       onToggleCode={handleToggleCode}
                       onOpenQr={handleOpenItemQr}

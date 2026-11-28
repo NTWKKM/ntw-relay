@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { AnimatePresence, MotionConfig, motion } from 'motion/react';
+import { AnimatePresence, MotionConfig, motion, useReducedMotion } from 'motion/react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -18,6 +18,105 @@ interface DropComposerProps {
   onUploadFiles: (files: File[]) => Promise<void>;
   uploads: UploadTaskState[];
   disabled?: boolean;
+  relayBurstKey?: number;
+}
+
+function RelayDropBurst({ reducedMotion }: { reducedMotion: boolean }) {
+  if (reducedMotion) {
+    return (
+      <motion.div
+        aria-hidden="true"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: [0, 0.9, 0] }}
+        transition={{ duration: 0.36, ease: 'easeOut' }}
+        className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center"
+      >
+        <span className="h-3.5 w-3.5 rounded-full bg-accent-2 ring-4 ring-accent/35" />
+      </motion.div>
+    );
+  }
+
+  const speedLines = [
+    { x: -58, h: 'h-12', delay: 0.16, tone: 'bg-accent-2/70' },
+    { x: -24, h: 'h-16', delay: 0.2, tone: 'bg-ink/45' },
+    { x: 0, h: 'h-24', delay: 0.14, tone: 'bg-accent-2' },
+    { x: 24, h: 'h-16', delay: 0.22, tone: 'bg-ink/45' },
+    { x: 58, h: 'h-12', delay: 0.18, tone: 'bg-accent-2/70' },
+  ];
+
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center overflow-visible"
+    >
+      {/* 1. Soft concentric seal ring as composer folds */}
+      <motion.div
+        initial={{ scale: 0.88, opacity: 0.7 }}
+        animate={{ scale: 1.12, opacity: 0 }}
+        transition={{ duration: 0.48, ease: [0.16, 1, 0.3, 1] }}
+        className="absolute inset-0 rounded-card border border-accent-2/50"
+      />
+
+      {/* 2. Vertical speed-lines streaking down to guide the eye into the card below */}
+      {speedLines.map((line) => (
+        <motion.span
+          key={line.x}
+          initial={{ y: -24, scaleY: 0.2, opacity: 0 }}
+          animate={{
+            y: [-24, 18, 122, 168],
+            scaleY: [0.2, 1.4, 1.65, 0.3],
+            opacity: [0, 0.95, 0.85, 0],
+          }}
+          transition={{
+            duration: 1.38,
+            delay: line.delay,
+            times: [0, 0.28, 0.76, 1],
+            ease: [0.22, 1, 0.36, 1],
+          }}
+          style={{ x: line.x }}
+          className={`absolute w-0.5 origin-top rounded-pill ${line.h} ${line.tone}`}
+        />
+      ))}
+
+      {/* 3. Wordless geometric coral capsule: folds from diamond into a streamlined drop */}
+      <motion.div
+        initial={{ scale: 0.4, rotate: 45, y: -6, opacity: 0 }}
+        animate={{
+          scaleX: [0.4, 1.1, 0.95, 0.65, 0.45],
+          scaleY: [0.4, 1.1, 1.15, 1.6, 0.6],
+          rotate: [45, 45, 0, 0, 0],
+          y: [-6, -8, -4, 96, 164],
+          opacity: [0, 1, 1, 0.95, 0],
+        }}
+        transition={{
+          duration: 1.45,
+          times: [0.1, 0.28, 0.46, 0.8, 1],
+          ease: [0.22, 1, 0.36, 1],
+        }}
+        className="relative flex items-center justify-center"
+      >
+        <div className="h-8 w-8 rounded-input bg-accent-2 border-2 border-ink shadow-[0_0_0_4px_var(--color-accent)]" />
+      </motion.div>
+
+      {/* 4. Soft ripple where the drop meets the feed card below */}
+      <motion.div
+        initial={{ y: 158, scaleX: 0.25, scaleY: 0.5, opacity: 0 }}
+        animate={{
+          y: 158,
+          scaleX: [0.25, 1.1, 1.35],
+          scaleY: [0.5, 1, 1.2],
+          opacity: [0, 0.75, 0],
+        }}
+        transition={{
+          duration: 0.46,
+          delay: 1.04,
+          times: [0, 0.45, 1],
+          ease: [0.16, 1, 0.3, 1],
+        }}
+        className="absolute h-7 w-28 rounded-pill border border-accent-2/70 bg-accent/15"
+      />
+    </div>
+  );
 }
 
 export function DropComposer({
@@ -25,7 +124,11 @@ export function DropComposer({
   onUploadFiles,
   uploads,
   disabled = false,
+  relayBurstKey = 0,
 }: DropComposerProps) {
+  const prefersReducedMotion = useReducedMotion();
+  const [clearedBurstKey, setClearedBurstKey] = useState<number>(0);
+  const showBurst = relayBurstKey > 0 && clearedBurstKey !== relayBurstKey;
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -41,6 +144,15 @@ export function DropComposer({
   useEffect(() => {
     disabledRef.current = disabled;
   }, [disabled]);
+
+  useEffect(() => {
+    if (relayBurstKey <= 0) return;
+    const timeoutMs = prefersReducedMotion ? 450 : 1560;
+    const timer = window.setTimeout(() => {
+      setClearedBurstKey(relayBurstKey);
+    }, timeoutMs);
+    return () => window.clearTimeout(timer);
+  }, [relayBurstKey, prefersReducedMotion]);
 
   // Fallback JS auto-grow strictly for browsers without native CSS `field-sizing: content`
   useEffect(() => {
@@ -221,6 +333,30 @@ export function DropComposer({
   return (
     <section aria-label="Compose drop" className="space-y-3">
       {/* Unified Writing & File Drop Surface — entire surface accepts drag-and-drop */}
+      <div className="relative">
+      <MotionConfig reducedMotion="user">
+      <motion.div
+        animate={
+          showBurst && !prefersReducedMotion
+            ? {
+                scaleX: [1, 0.62, 0.36, 0.26],
+                scaleY: [1, 0.28, 0.22, 0.14],
+                y: [0, 0, -6, 152],
+                opacity: [1, 0.75, 0.25, 0],
+              }
+            : { scaleX: 1, scaleY: 1, y: 0, opacity: 1 }
+        }
+        transition={
+          showBurst && !prefersReducedMotion
+            ? {
+                duration: 1.48,
+                times: [0, 0.24, 0.62, 1],
+                ease: [0.22, 1, 0.36, 1],
+              }
+            : { duration: 0.26, ease: [0.16, 1, 0.3, 1] }
+        }
+        className={`origin-center ${showBurst ? 'pointer-events-none' : ''}`}
+      >
       <form
         ref={formRef}
         onSubmit={handleFormSubmit}
@@ -331,6 +467,18 @@ export function DropComposer({
           </AnimatePresence>
         </MotionConfig>
       </form>
+      </motion.div>
+
+        <AnimatePresence>
+          {showBurst && (
+            <RelayDropBurst
+              key={relayBurstKey}
+              reducedMotion={Boolean(prefersReducedMotion)}
+            />
+          )}
+        </AnimatePresence>
+      </MotionConfig>
+      </div>
 
       {/* Inline Validation Error */}
       {error && (

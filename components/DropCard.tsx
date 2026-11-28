@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 import {
   Check,
   Code2,
@@ -34,6 +34,7 @@ import type { DropItem } from '@/lib/types';
 interface DropCardProps {
   ref?: React.Ref<HTMLElement>;
   item: DropItem;
+  isJustRelayed?: boolean;
   onDelete: (item: DropItem) => Promise<void>;
   onToggleCode: (item: DropItem, nextIsCode: boolean) => Promise<void>;
   onOpenQr: (item: DropItem) => void;
@@ -62,11 +63,13 @@ function FileTypeIcon({ fileName, mimeType }: { fileName?: string; mimeType?: st
 export function DropCard({
   ref,
   item,
+  isJustRelayed = false,
   onDelete,
   onToggleCode,
   onOpenQr,
   onOpenImage,
 }: DropCardProps) {
+  const prefersReducedMotion = useReducedMotion();
   const [copiedLabel, setCopiedLabel] = useState<string | null>(null);
   const [downloadLabel, setDownloadLabel] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -114,18 +117,64 @@ export function DropCard({
     }
   }
 
+  const shouldAnimateCatch = isJustRelayed && !prefersReducedMotion;
+
   return (
     <motion.article
       ref={ref}
       layout="position"
-      initial={{ opacity: 0, y: 6, scale: 0.99 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.985 }}
-      transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+      initial={
+        shouldAnimateCatch
+          ? { opacity: 0, y: -28, scale: 0.94 }
+          : { opacity: 0, y: 6, scale: 0.99 }
+      }
+      animate={
+        deleting && !prefersReducedMotion
+          ? { opacity: 0.72, y: 0, scale: 0.975 }
+          : { opacity: 1, y: 0, scale: 1 }
+      }
+      exit={
+        prefersReducedMotion
+          ? { opacity: 0, transition: { duration: 0.24 } }
+          : {
+              opacity: [1, 0.95, 0.85, 0],
+              scaleX: [1, 0.94, 0.72, 0.28],
+              scaleY: [1, 0.14, 0.05, 0.02],
+              y: [0, -2, -6, -18],
+              transition: {
+                duration: 0.95,
+                times: [0, 0.42, 0.7, 1],
+                ease: [0.4, 0, 0.2, 1],
+              },
+            }
+      }
+      transition={
+        shouldAnimateCatch
+          ? { duration: 0.5, delay: 0.88, ease: [0.22, 1, 0.36, 1] }
+          : { duration: 0.24, ease: [0.16, 1, 0.3, 1] }
+      }
       data-testid="drop-card"
       data-drop-type={item.type}
-      className="group rounded-card coral-stock coral-stock-interactive px-4 sm:px-5 py-4 space-y-3"
+      className="relative group rounded-card coral-stock coral-stock-interactive px-4 sm:px-5 py-4 space-y-3 origin-center"
     >
+      {shouldAnimateCatch && (
+        <motion.div
+          aria-hidden="true"
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: [0, 0.95, 0], scale: [0.98, 1.015, 1] }}
+          transition={{ duration: 0.65, delay: 1.0, ease: [0.16, 1, 0.3, 1] }}
+          className="pointer-events-none absolute inset-0 rounded-card border-2 border-accent-2"
+        />
+      )}
+      {deleting && !prefersReducedMotion && (
+        <motion.div
+          aria-hidden="true"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.14 }}
+          className="pointer-events-none absolute inset-0 rounded-card border border-error/50 bg-error/5"
+        />
+      )}
       {/* Whisper-quiet metadata + minimal action cluster */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3 text-xs text-muted tabular-nums min-w-0 whitespace-nowrap">
